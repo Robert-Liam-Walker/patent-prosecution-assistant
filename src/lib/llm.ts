@@ -12,8 +12,8 @@ const provider = createOpenAICompatible({
   apiKey: "ollama",
 });
 
-const CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL ?? "qwen2.5:7b-instruct";
-const FAST_MODEL = process.env.OLLAMA_FAST_MODEL ?? "qwen2.5:7b-instruct";
+const CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL ?? "llama3.1:8b";
+const FAST_MODEL = process.env.OLLAMA_FAST_MODEL ?? "llama3.1:8b";
 
 export const chatModel = provider.chatModel(CHAT_MODEL);
 export const fastModel = provider.chatModel(FAST_MODEL);
