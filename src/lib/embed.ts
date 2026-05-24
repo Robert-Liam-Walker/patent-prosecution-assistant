@@ -1,7 +1,10 @@
-import { openai } from "@ai-sdk/openai";
+import { togetherai } from "@ai-sdk/togetherai";
 import { embed, embedMany } from "ai";
 
-const model = openai.textEmbeddingModel("text-embedding-3-small");
+// BGE-large-en-v1.5 on Together AI. 1024 dims. ~$0.008/M tokens.
+// Same provider as the Qwen chat model → one API key for the whole stack.
+// (Qwen3-Embedding isn't hosted on Together AI — would need DashScope for strict-Qwen.)
+const model = togetherai.textEmbeddingModel("BAAI/bge-large-en-v1.5");
 
 export async function embedQuery(text: string): Promise<number[]> {
   const { embedding } = await embed({ model, value: text });

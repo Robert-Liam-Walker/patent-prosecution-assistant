@@ -75,7 +75,7 @@ export const caseDocs = pgTable(
 );
 
 // Unified chunk table — global corpus rows have case_id = NULL.
-// 1536 dims to match OpenAI text-embedding-3-small.
+// 1024 dims to match Together AI's BGE-large-en-v1.5.
 export const chunks = pgTable(
   "chunks",
   {
@@ -94,7 +94,7 @@ export const chunks = pgTable(
     sourceUrl: text("source_url"),
     citation: text("citation").notNull(),
     text: text("text").notNull(),
-    embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+    embedding: vector("embedding", { dimensions: 1024 }).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
