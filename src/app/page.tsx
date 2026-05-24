@@ -1,6 +1,8 @@
 import { Chat } from "@/components/Chat";
 import { ScrollText } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <div className="flex-1 flex flex-col">

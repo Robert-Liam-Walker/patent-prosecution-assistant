@@ -1,4 +1,7 @@
 import { notFound } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUserId } from "@/lib/auth";
