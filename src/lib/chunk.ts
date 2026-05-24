@@ -5,13 +5,14 @@
 const HEADER_SPLITTERS = [
   /\n(?=Claim\s+\d+\s*:)/g, // "Claim 1:"
   /\n(?=Claim\s+Rejections\s*-)/gi, // OA claim-rejection section headers
-  /\n(?=\s*§\s*\d+(\.\d+)?)/g, // statute/reg sections
+  /\n(?=\s*§\s*\d+(?:\.\d+)?)/g, // statute/reg sections
   /\n(?=MPEP\s+§)/gi, // MPEP refs
   /\n(?=[A-Z][A-Z\s]{4,}\n)/g, // ALL CAPS HEADERS
 ];
 
-const TARGET_CHARS = 2000; // ~500 tokens
-const OVERLAP_CHARS = 400; // ~100 tokens
+// Keep chunks under the local embedding context on dense legal text.
+const TARGET_CHARS = 1000;
+const OVERLAP_CHARS = 200;
 
 export interface Chunk {
   text: string;
@@ -26,7 +27,13 @@ export function chunkText(text: string, headerHint?: string): Chunk[] {
   // First pass: split on header boundaries.
   let segments: string[] = [normalized];
   for (const re of HEADER_SPLITTERS) {
-    segments = segments.flatMap((s) => s.split(re).filter((x) => x.trim()));
+    segments = segments.flatMap((s) =>
+      s
+        .split(re)
+        .filter(
+          (x): x is string => typeof x === "string" && x.trim().length > 0,
+        ),
+    );
   }
 
   // Second pass: any segment over TARGET_CHARS gets recursively split with overlap.

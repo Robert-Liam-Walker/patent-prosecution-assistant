@@ -9,6 +9,9 @@
     "db:push": "drizzle-kit push --force",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
+    "ingest:local": "tsx scripts/ingest/local.ts",
+    "ingest:mpep": "tsx scripts/ingest/fetch_mpep.ts",
+    "uspto:status": "tsx scripts/uspto/status.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -42,6 +45,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
+    "tsx": "^4.22.3",
     "typescript": "^5"
   }
 }
