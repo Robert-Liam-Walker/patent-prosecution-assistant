@@ -33,6 +33,13 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# user-requested secrets file
+/keys.txt
+
+# uploaded user docs (per-case, contains client info)
+/data/
+/uploads/
+
 # vercel
 .vercel
 
