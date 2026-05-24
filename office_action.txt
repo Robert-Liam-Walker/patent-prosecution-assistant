@@ -1,0 +1,16 @@
+Office Action Summary
+
+Application No.: 17/123,456
+
+Rejection: Claim 1 is rejected under 35 U.S.C. §102 as being anticipated by U.S. Patent No. 9,123,456.
+
+Examiner Findings:
+
+Reference 9,123,456 discloses:
+- receiving multiple legal or digital documents
+- generating relevance scores based on similarity and usage metrics
+- ranking documents according to computed scores
+- displaying ranked results to a user interface
+- updating rankings based on user interaction (clicks, engagement time)
+
+Therefore, all limitations of Claim 1 are disclosed in the prior art reference.

@@ -1,6 +1,6 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { chatModel } from "@/lib/llm";
-import { SYSTEM_PROMPT } from "@/lib/prompts";
+import { SYSTEM_PROMPT, NO_SOURCES_NOTE } from "@/lib/prompts";
 import { retrieve, formatContext } from "@/lib/rag";
 import { z } from "zod";
 
@@ -29,19 +29,27 @@ export async function POST(req: Request) {
       .join(" ") ?? "";
 
   let contextBlock = "";
+  let sourcesFound = false;
   if (lastUserText) {
     const chunks = await retrieve(lastUserText, {
       caseId: parsed.data.caseId ?? null,
       k: 8,
     });
     if (chunks.length > 0) {
-      contextBlock = `\n\nRelevant sources:\n${formatContext(chunks)}`;
+      sourcesFound = true;
+      contextBlock = `\n\nRetrieved sources:\n${formatContext(chunks)}`;
     }
   }
 
+  // Force FRAMEWORK mode when retrieval is empty — prevents the model from
+  // fabricating element-by-element mappings against imagined prior art.
+  const systemPrompt = sourcesFound
+    ? SYSTEM_PROMPT + contextBlock
+    : SYSTEM_PROMPT + NO_SOURCES_NOTE;
+
   const result = streamText({
     model: chatModel,
-    system: SYSTEM_PROMPT + contextBlock,
+    system: systemPrompt,
     messages: modelMessages,
   });
 

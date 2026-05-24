@@ -1,0 +1,20 @@
+U.S. Patent Application No. 17/123,456 (Fictional Test Case)
+
+Title: System for Adaptive Legal Document Prioritization
+
+CLAIM 1:
+
+A computer-implemented method comprising:
+
+(a) receiving a plurality of legal documents associated with a case file;
+
+(b) generating a relevance score for each legal document based on:
+    (i) semantic similarity to a user query,
+    (ii) recency of the legal document, and
+    (iii) citation frequency within a legal corpus;
+
+(c) ranking the plurality of legal documents based on the relevance score;
+
+(d) displaying a ranked list of legal documents to a user interface;
+
+(e) updating the relevance score dynamically in response to user interaction with the documents.

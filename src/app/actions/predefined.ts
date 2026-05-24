@@ -11,8 +11,9 @@ import {
   PREDICT_NEXT_ACTION_PROMPT,
   SUMMARIZE_STATUS_PROMPT,
   SYSTEM_PROMPT,
+  NO_SOURCES_NOTE,
 } from "@/lib/prompts";
-import { retrieve, formatContext } from "@/lib/rag";
+import { retrieve, formatContext, type RetrievedChunk } from "@/lib/rag";
 import { getApplicationStatus } from "@/lib/uspto";
 
 type ActionResult = { ok: true; output: string } | { ok: false; error: string };
@@ -45,22 +46,26 @@ async function loadCaseSummary(caseId: string): Promise<string> {
 async function withRetrievedContext(
   caseId: string,
   query: string,
-): Promise<string> {
+): Promise<{ ctx: string; chunks: RetrievedChunk[] }> {
   const chunks = await retrieve(query, { caseId, k: 10 });
-  return formatContext(chunks);
+  return { ctx: formatContext(chunks), chunks };
+}
+
+function systemFor(chunks: RetrievedChunk[]): string {
+  return chunks.length > 0 ? SYSTEM_PROMPT : SYSTEM_PROMPT + NO_SOURCES_NOTE;
 }
 
 export async function draftNextMotion(caseId: string): Promise<ActionResult> {
   try {
     const summary = await loadCaseSummary(caseId);
-    const ctx = await withRetrievedContext(
+    const { ctx, chunks } = await withRetrievedContext(
       caseId,
       "outstanding rejections; next required filing under MPEP",
     );
     const { text } = await generateText({
       model: chatModel,
-      system: SYSTEM_PROMPT,
-      prompt: `${DRAFT_MOTION_PROMPT(summary)}\n\nSources:\n${ctx}`,
+      system: systemFor(chunks),
+      prompt: `${DRAFT_MOTION_PROMPT(summary)}\n\nSources:\n${ctx || "(none retrieved)"}`,
     });
     return { ok: true, output: text };
   } catch (e) {
@@ -71,11 +76,14 @@ export async function draftNextMotion(caseId: string): Promise<ActionResult> {
 export async function draftNextEmail(caseId: string): Promise<ActionResult> {
   try {
     const summary = await loadCaseSummary(caseId);
-    const ctx = await withRetrievedContext(caseId, "recent correspondence; client updates");
+    const { ctx, chunks } = await withRetrievedContext(
+      caseId,
+      "recent correspondence; client updates",
+    );
     const { text } = await generateText({
       model: chatModel,
-      system: SYSTEM_PROMPT,
-      prompt: `${DRAFT_EMAIL_PROMPT(summary)}\n\nSources:\n${ctx}`,
+      system: systemFor(chunks),
+      prompt: `${DRAFT_EMAIL_PROMPT(summary)}\n\nSources:\n${ctx || "(none retrieved)"}`,
     });
     return { ok: true, output: text };
   } catch (e) {
@@ -86,14 +94,14 @@ export async function draftNextEmail(caseId: string): Promise<ActionResult> {
 export async function predictNextAction(caseId: string): Promise<ActionResult> {
   try {
     const summary = await loadCaseSummary(caseId);
-    const ctx = await withRetrievedContext(
+    const { ctx, chunks } = await withRetrievedContext(
       caseId,
       "office action history; rejections; examiner patterns",
     );
     const { text } = await generateText({
       model: chatModel,
-      system: SYSTEM_PROMPT,
-      prompt: `${PREDICT_NEXT_ACTION_PROMPT(summary)}\n\nSources:\n${ctx}`,
+      system: systemFor(chunks),
+      prompt: `${PREDICT_NEXT_ACTION_PROMPT(summary)}\n\nSources:\n${ctx || "(none retrieved)"}`,
     });
     return { ok: true, output: text };
   } catch (e) {
