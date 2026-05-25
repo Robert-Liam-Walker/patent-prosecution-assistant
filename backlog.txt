@@ -1,0 +1,341 @@
+Patent Prosecution Assistant — Backlog
+Ordered top-to-bottom by priority. Mirrors CLAUDE.md "Backlog" plus the
+follow-ups surfaced during the 2026-05-24 session.
+
+Status legend: [TODO] not started · [WIP] in progress · [DONE] complete.
+This file mirrors the kanban board on EC2 (panini board id=2 at
+http://34.205.37.22:3000/). When you start/finish an item, update BOTH:
+update the prefix here AND move the card with scripts/kanban/move.sh.
+See CLAUDE.md → "Tracking discipline" for the workflow.
+
+[DONE] 1. Global-corpus ingestion: 35 USC fetcher
+   scripts/ingest/fetch_usc.ts via `npm run ingest:usc`. Pulls Title 35
+   from Cornell LII (tab_default_1 pane). Reuses scripts/ingest/shared.ts.
+   Tags chunks with doc_type=usc and citations like "35 U.S.C. § 102".
+   Flags: --section / --part {I..V} / --core / --all / --limit / --dry-run
+   / --clear-existing / --delay-ms. Verified live with §§ 101–103
+   (2026-05-24); 88 chunks across the 20 core sections in dry-run.
+
+[DONE] 2. Global-corpus ingestion: 37 CFR fetcher
+   scripts/ingest/fetch_cfr.ts via `npm run ingest:cfr`. Uses eCFR
+   Versioner API: /titles to discover the latest issue date, then
+   /full/<date>/title-37.xml?part=<n> per requested part. DIV8
+   depth-tracking parser emits only top-level SECTION nodes (no
+   subsection duplication). doc_type=cfr, citations like "37 C.F.R.
+   § 1.111", source_url to ecfr.gov per section. Default parts: 1, 11,
+   41, 42. Flags: --part / --section / --date / --limit / --dry-run /
+   --clear-existing / --delay-ms. Verified live with §§ 1.111 / 1.112
+   / 1.114 (2026-05-24); 9 chunks in Postgres.
+
+[DONE] 3. Global-corpus ingestion: PTAB decisions fetcher
+   scripts/ingest/fetch_ptab.ts via `npm run ingest:ptab`. Scrapes the
+   USPTO precedential + informative decisions index, pairs each PDF link
+   with its nearest preceding designation marker, downloads + parses with
+   pdf-parse 2.x (PDFParse class — pdf-parse 1.x default export was
+   removed). doc_type=ptab_decision, citation like "Caption, IPR-####,
+   Paper N (PTAB) (precedential)". Flags: --designation / --filter /
+   --limit / --dry-run / --clear-existing / --delay-ms. Verified live
+   with 3 precedential decisions (2026-05-24); 82 chunks in Postgres.
+
+[DONE] 4. Global-corpus ingestion: Federal Circuit opinions fetcher
+   scripts/ingest/fetch_fed_circuit.ts via `npm run ingest:fed-circuit`.
+   Parses www.cafc.uscourts.gov opinions table (server-rendered, no
+   auth). CourtListener v3 was ruled out: it now requires API tokens.
+   Apex cafc.uscourts.gov has a broken TLS cert chain in node fetch
+   (UNABLE_TO_VERIFY_LEAF_SIGNATURE) — always use www.cafc.uscourts.gov.
+   doc_type=fed_circuit, citation like "CAPTION, No. 24-1140 (Fed. Cir.
+   May 22, 2026) (precedential)". Flags: --origin {PTO|DCT|ITC|CFC|RIT|
+   all} / --type / --designation / --filter / --limit / --dry-run /
+   --clear-existing / --delay-ms. Caveat: the CAFC index only exposes
+   the most-recent ~25–30 dispositions; building a historical archive
+   needs a different source (PACER, paid CourtListener, scraping
+   monthly archives). Verified live with 2 recent opinions (2026-05-24);
+   66 chunks in Postgres.
+
+[DONE] 4a. Grounding-discipline failure: case docs pushed out of context by global corpus
+   Reported 2026-05-24 after seeding the four corpus sources. Query
+   "§102 rejection, US 9,123,456…" against case ea68b684… (claims2.txt
+   + 2 prior-art .txt + office_action_2.txt uploaded) made the model
+   reply in FRAMEWORK mode with "Claim text not in retrieved sources"
+   — even though all 4 chunks were in Postgres.
+   Diagnosis: scripts/diag_retrieval.ts showed top-k=8 cosine returned
+   only 1 of 4 case chunks (the OA, which shares vocabulary with §102
+   statute text); claims2.txt and both prior arts ranked below sim=0.667
+   while every MPEP/USC chunk scored 0.70+. Even k=24 didn't surface
+   the missing 3.
+   Fix shipped: (a) src/lib/rag.ts now runs two scoped queries with
+   independent kCase / kGlobal budgets (defaults: 8 case + 6 global)
+   and orders case chunks first; legacy `k` still supported via 50/50
+   split. (b) src/lib/prompts.ts: GROUNDED is the default whenever
+   ANY source is retrieved; FRAMEWORK only on zero. Dropped the "and
+   stop" claim-missing escape; added explicit "restate Claim 1 elements
+   verbatim before analysis when claim-like doc is present" rule.
+   (c) formatContext emits traceable [filename] / [formal citation]
+   labels with authority-tier tags (CASE DOC / BINDING / PERSUASIVE);
+   prompts cite by echoing those labels. Verified end-to-end via
+   scripts/chat_e2e.ts — model now restates all five claim elements,
+   maps each to US 9,123,456 with strength tags, and concludes "§102
+   cannot be sustained" with the specific gap (citation-frequency
+   element not disclosed). See memory `retrieval-budget-pattern`.
+
+[DONE-prompt / BLOCKED-model] 4b. Prosecution-grade strictness: ban "fully anticipated" overuse + inherency leaks
+   Prompt side shipped in src/lib/prompts.ts:
+     - Added "REJECTION / PRIOR-ART ANALYSIS — STRICT MODE" section that
+       triggers when claim text is retrieved and the user mentions
+       rejection / §102 / §103 / anticipation / obvious / prior art /
+       office action.
+     - Three-label discipline only: FULLY DISCLOSED / PARTIALLY
+       DISCLOSED / NOT DISCLOSED. Banned: "fully anticipated",
+       "essentially disclosed", "covers", "teaches the same".
+     - Inherency banned without necessity showing — model must write
+       "INHERENCY ARGUMENT — REQUIRES NECESSITY SHOWING NOT IN RECORD"
+       and label NOT DISCLOSED.
+     - Forbidden: critique not tied to a claim limitation (kills the
+       "lacks GUI detail" failure mode).
+     - INSUFFICIENT RETRIEVED SUPPORT gap-flag for un-judgeable
+       limitations; no general-knowledge backfill.
+     - Locator rule: only column/line/paragraph numbers that appear
+       VERBATIM in retrieved text. Quote exactly. No invention.
+     - Mandatory (A)–(E) output template (CLAIM BREAKDOWN /
+       PRIOR ART MAPPING / §102 VERDICT / §103 ANALYSIS / CONCLUSION
+       with consistency self-check).
+   Verified (scripts/chat_e2e.ts, 3 iterations): on Llama 3.1 8B the
+   locator-fabrication failure mode is FIXED (no more invented col/line
+   refs). The 3-label discipline and (A)–(E) template are PARTIALLY
+   honored — 8B still emits "fully anticipated" and skips template
+   headers in most runs. This is a model-capacity ceiling, not a prompt
+   bug. The prompt is correct for any capable model (Sonnet 4.6+ /
+   Opus 4.7) and will compose cleanly with item 6 (citation /
+   terminology post-pass) and item 9 (model upgrade). Marked
+   DONE-prompt to record that the prompt change shipped; calibration
+   gap remains until items 6 + 9. See memory `prompt-vs-model-ceiling`.
+
+[DONE-prompt / BLOCKED-model] 4c. Binary §102 ontology: drop PARTIALLY DISCLOSED label
+   Prompt shipped in src/lib/prompts.ts: 2-label (DISCLOSED /
+   NOT DISCLOSED), default to NOT DISCLOSED on any semantic gap;
+   nuance lives in the Gap sentence not in the label. §102 verdict
+   is now an explicit BINARY SATISFIED / NOT SATISFIED with a list
+   of NOT DISCLOSED limitation IDs. Banned terminology explicitly
+   enumerated (partial anticipation / partially anticipated / partial
+   §102 / TA/PD / fully anticipated / essentially disclosed / covers
+   / teaches the same / substantially identical).
+   8B execution after this change REGRESSED: the longer system prompt
+   stole attention from the retrieved content and the model fabricated
+   a hypothetical Claim 1 from the prior art instead of reading
+   claims2.txt (which retrieval still placed at rank 2). This is the
+   "prompt tightening is now negative on 8B" inflection point — three
+   iterations (4a → 4b → 4c) of progressively-stricter prompts have
+   reached the model's capacity limit. The prompts.ts file is now
+   legally correct and ready for a capable model; further prompt
+   iteration on 8B will keep regressing. Path forward (recorded in
+   memory `prompt-vs-model-ceiling`, now expanded):
+     - Item 6 (citation / terminology post-pass) catches the banned
+       terms + non-retrieved locators that the model still emits.
+     - Item 9 (model upgrade: Sonnet 4.6 / Opus 4.7 / Llama 3.3 70B
+       via the documented provider swap) is the load-bearing fix.
+     - Item 5 (generateObject + Zod schema) is the structural way to
+       force the (A)-(E) template — slot-filling beats template
+       following for any model and is the right alternative to
+       further prompt tightening.
+
+[DONE] 4d. Structured rejection analyzer via generateObject + Zod
+   Shipped src/lib/analyze-rejection.ts. Flat Zod schema (nested
+   schemas don't work on 8B — model invents its own shape and AI SDK
+   repair pass can't recover). Disclosure is a union-coerced enum:
+   anything other than literal "DISCLOSED" → "NOT_DISCLOSED" (preserves
+   the binary discipline even if the model emits "PARTIALLY_DISCLOSED").
+   SoftBool union handles missing or stringified booleans.
+   nullish().transform() coerces undefined → default for optional
+   string/array fields. Conclusion runs through scrubBannedTerms() to
+   rewrite any "partial/fully anticipated" smuggled into prose.
+   AI-SDK v6 gotcha: `mode: "json"` no longer exists; let the SDK
+   auto-select. Another gotcha: z.undefined() in a union breaks JSON
+   schema conversion ("Undefined cannot be represented in JSON Schema")
+   — use .nullish() instead.
+   Chat route detection (src/app/api/chat/route.ts): when query matches
+   /rejection|§\s*10[23]|anticipat|obvious|prior art|office action/ AND
+   retrieval includes case docs, route through analyzeRejection.
+   Render via renderAnalysisMarkdown — (A)-(E) headers come from our
+   code, not the model, so they're structurally guaranteed.
+   Verified E2E (scripts/diag_generateobject.ts + scripts/chat_e2e.ts):
+   structured output with binary verdicts, claim text quoted verbatim
+   from claims2.txt, §102 NOT SATISFIED with failing limitation IDs
+   listed. Residual 8B calibration noise (occasionally mis-labels a
+   limitation or picks wrong evidence text) is unavoidable without
+   items 9 or 10 — but the structural ground floor is now bulletproof.
+   See memory `structured-output-pattern`.
+
+[DONE] 4e. Calibration tier: PARTIALLY_DISCLOSED at limitation level (verdict stays binary)
+   Shipped src/lib/analyze-rejection.ts:
+     - DISCLOSURE enum is now 3-tier (DISCLOSED / PARTIALLY_DISCLOSED /
+       NOT_DISCLOSED), still coerced via union → fallthrough to
+       NOT_DISCLOSED on unrecognized labels.
+     - deriveVerdicts treats PARTIALLY as NOT_DISCLOSED for the §102
+       binary verdict (§102 requires every limitation FULLY disclosed
+       in one ref — same legal effect). Verdict conclusion text
+       distinguishes "partial (arguable)" from "absent" for the
+       prosecutor's benefit.
+     - verifyEvidence now runs on DISCLOSED AND PARTIALLY_DISCLOSED
+       rows — unverifiable evidence still auto-downgrades to
+       NOT_DISCLOSED.
+     - System prompt has 3-way calibration block with concrete worked
+       examples: vector-similarity vs semantic-similarity is PARTIAL
+       (not NOT_DISCLOSED — over-strict fix); ranking-updated-dynamically
+       vs recalc-after-each-event is PARTIAL (not DISCLOSED — under-
+       strict fix); "when in doubt between A and B → choose more
+       conservative".
+     - §103 schema now has s103ReferenceContributions: array of
+       {reference, contributes}. Schema is nullish-with-default to
+       avoid breaking generateObject when the model omits; deriveVerdicts
+       synthesizes placeholder contributions when secondary is cited
+       and §102 fails — placeholder names what the secondary would need
+       to cover, flagged as analyzer-synthesized in the renderer.
+     - Renderer shows the 3-way labels with ✓⚠✗ markers; (C) §102
+       breaks failing limitations into "partial (arguable)" vs
+       "absent" subgroups; (D) §103 prints per-reference contributions.
+   Eval rubric updated: 3-label compliance check, partial-or-failing
+   ground-truth check on (b)(i)/(e) (verifies over/under-strict guard),
+   §103 contributions presence check.
+   Trajectory: iter 1 baseline 92% (2 failures: own renderer triggered
+   the "partially disclosed" banned regex, and model omitted §103
+   contributions); iter 2 100% after dropping false-positive regex and
+   synthesizing missing §103 contributions. Stability: 100% on 3 of 4
+   runs, 95% on the 4th (variance — 8B is not deterministic at
+   temperature=0.1).
+   Ready to apply this template to draftNextMotion / predictNextAction
+   / getStatus (item #5 / Task #64).
+
+[DONE] 5. Structured output for predefined actions
+   Shipped three new helpers, all following the analyze-rejection.ts
+   template (flat Zod schema + soft enums + nullish/SoftBool coercions
+   + generateObject with Ollama format:json + temperature=0.1 + retry
+   + render-from-code markdown):
+     - src/lib/predict-action.ts (predictNextAction) — enum mostLikelyAction
+       across 11 USPTO action types, LOW/MEDIUM/HIGH probability,
+       up-to-2 alternatives, examinerStatsUsed flag.
+     - src/lib/draft-motion.ts (draftNextMotion) — 12-value
+       DocumentType enum, canDraftFromSources gate (when false,
+       draftBody must be empty — no fabricated drafts), claims/
+       authorities arrays, verifyAuthorities post-pass that drops
+       hallucinated citations and surfaces them in openQuestions.
+     - src/lib/case-status.ts (getCaseStatus) — every field
+       nullable so "(not in record)" semantics are enforced;
+       synthesizeRecommendation defensively fills recommendedNextStep
+       from the first outstanding deadline / open issue when the
+       model omits it.
+   src/app/actions/predefined.ts rewritten to call the structured
+   helpers + render-to-markdown. Existing ActionResult shape preserved
+   so the UI didn't need to change. draftNextEmail kept on freeform
+   generateText — schema would be minimal and freeform works.
+   scripts/eval_actions.ts: 8 + 9 + 4 = 21 programmatic checks across
+   the three actions. Baseline 17/21 (94%) on first run; iter 1
+   nullish-coerce recommendedNextStep → 20/21 (95%); iter 2
+   synthesizeRecommendation fallback → 21/21 (100%). Stable across
+   3 consecutive runs at 100%.
+   Notable: this required FAR fewer iterations than 4d (5 iters) /
+   4e (2 iters). Template carryover worked — flat schema + soft
+   coercions + render-from-code is now the reliable recipe.
+   Wrap the four chains in src/app/actions/predefined.ts with AI SDK
+   generateObject + Zod schemas (claim_breakdown, alleged_disclosures,
+   differentiating_features, amendment_suggestions, confidence,
+   sources_used). Hardest constraint on hallucination; gives the UI
+   exact fields to render.
+
+[TODO] 6. Citation verification post-pass
+   Regex-extract [Source N] from model output; strip or flag any N that
+   doesn't appear in the retrieved chunk list. Runs server-side before
+   returning the stream. Pairs with item 5.
+
+[TODO] 7. Reranker over top-50 retrieval
+   Cosine alone is mediocre on legal queries. Add BGE-reranker-large
+   (local) or Cohere rerank-3 (hosted) over top-50 → top-10. Wire into
+   src/lib/rag.ts behind a RERANKER env flag.
+
+[TODO] 8. USPTO ODP file-wrapper import action
+   Per-case action that lists ODP documents for an application, lets the
+   user select PDFs, downloads via downloadUrl, then parses/chunks/embeds
+   into case_docs like a user upload. Builds on the metadata/documents
+   endpoints already wired in src/lib/uspto.ts.
+
+[TODO] 9. Model upgrade path
+   Llama 3.1 8B is the ceiling for legal nuance. Document + test swap to
+   hosted Claude (sonnet-4-6 or opus-4-7) per the "Swapping Ollama →
+   hosted" section. Acceptance test: re-run the 2026-05-24 eval prompts
+   and compare grounded-mode citation accuracy.
+
+[DONE] 10. Eval harness (autonomous improvement loop) — and rolled in 6 (post-pass) + part of 5 (structured-output discipline)
+   Built scripts/eval_loop.ts: 11-check rubric per test case, programmatic
+   scorer, ground-truth comparison. Ran a 5-iteration autonomous loop on
+   the structured rejection analyzer. Each iteration: run harness, read
+   the top failure mode, apply ONE targeted fix to analyze-rejection.ts
+   (or eval_loop.ts when the check itself was wrong), re-run.
+   Trajectory:
+     iter 1 (baseline + temperature=0.1 + Ollama format:json + retry):
+       18/22 = 82%
+     iter 2 (derive s102Satisfied/failingIds/s103Sustainable from
+       limitation labels instead of trusting model verdict fields):
+       21/22 = 95%
+     iter 3 (verbatim-quote prompt instruction): 20/22 = 91% (regressed
+       — model started paraphrasing on more limitations)
+     iter 4 (verifyEvidence post-pass: auto-downgrade DISCLOSED whose
+       evidence isn't a substring of any retrieved chunk): 20/22 = 91%
+     iter 5 (scope/qualifier-mismatch rule in prompt + eval accepts
+       auto-downgrade sentinels): 22/22 = 100%
+   Stability: 100% sustained across 4 consecutive runs.
+   Load-bearing fixes (each is a documented memory pattern):
+     - derived verdicts (collapse the model-vs-verdict inconsistency
+       failure class entirely)
+     - verifyEvidence (the citation/post-pass discipline from item 6
+       applied narrowly to the evidence field)
+     - scope-mismatch rule (8B can't reason about scope without explicit
+       prompting; the rule + 3 worked examples close the calibration gap)
+   This collapses backlog #10 (eval harness) and #6 (citation/post-pass
+   verification — the verifyEvidence pass IS exactly that pattern). #5
+   (structured output for predefined actions) is partially addressed:
+   analyze-rejection.ts is the reusable template; remaining work is
+   applying it to draftNextMotion / predictNextAction / getStatus.
+
+[TODO] 10. Eval harness
+    Borrow the pattern from ../llm-bench. Fixed prompts + expected
+    citations + judge model. Run on each prompt/model change to catch
+    regressions like the buzzword-amendment failure mode.
+
+[TODO] 11. Auth.js v5 swap-in
+    Replace the SINGLE_USER_ID stub in src/lib/auth.ts. Schemas are
+    already FK'd to users so this is additive. Needed before
+    multi-prosecutor deployments.
+
+[TODO] 12. Test-fixture hygiene
+    Move claims.txt, office_action.txt, prior_art.txt out of repo root
+    into test-data/ and gitignore. They're fictional fixtures that
+    shouldn't ship. Also covers claims2.txt, office_action_2.txt,
+    prior_art_us8765432.txt, prior_art_us9123456.txt (added 2026-05-25
+    for the structured-analyzer eval).
+
+[TODO] 13. Conversation memory (chat continuity)
+    User-reported (backlog3 scratch note 2026-05-25): "kinda doesn't
+    look like each prompt is based on the last one? i kept asking the
+    same thing and it didn't look like it had memory. i'd like it to
+    have memory like chatgpt does." The chat route currently re-runs
+    retrieval on the LAST user message only and treats every turn as
+    fresh — the model sees prior turns via the messages array, but
+    retrieval doesn't accumulate. Schema already has conversations +
+    messages tables (see src/lib/db/schema.ts); they aren't wired into
+    the chat route. Scope: persist conversations + messages per case;
+    UI to load prior conversations; chat route reads back the last N
+    turns plus retrieval on the FULL conversation (not just last
+    message). Pairs with item 11 (Auth.js) for multi-user separation.
+
+[TODO] 14. Deployment topology: AWS frontend + local-GPU Ollama backend
+    User scratch note 2026-05-25 (backlog2): "tailscale or cloudflare
+    instead of port forwarding, put it on a simple aws vm, maybe a
+    t3.small (all the logic wont live here just the frontend), and
+    have it call my local pc with a powerful gpu for ollama. plus
+    ollama / llama 3 is already on my local so it should be easy."
+    Concretely: t3.small EC2 running Next.js, points OLLAMA_BASE_URL
+    at the Mac mini via Tailscale tunnel (no port forwarding, no
+    public IP exposure). Postgres + pgvector can live on EC2 or Neon.
+    R2 stays for storage. Lets the user demo the live UI without
+    moving the model off-prem. Confirms the openai-compatible
+    abstraction also works against remote Ollama, which is useful
+    independent of deployment plan.

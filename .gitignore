@@ -36,6 +36,9 @@ yarn-error.log*
 # user-requested secrets file
 /keys.txt
 
+# local kanban admin helpers (carry ADMIN_TOKEN, not for distribution)
+/scripts/kanban/
+
 # uploaded user docs (per-case, contains client info)
 /data/
 /uploads/

@@ -1,0 +1,25 @@
+Office Action Summary
+
+Application No.: 17/555,111
+
+Rejection:
+
+Claim 1 is rejected under:
+- 35 U.S.C. §102 as anticipated by U.S. Patent No. 9,123,456
+- 35 U.S.C. §103 as obvious over U.S. Patent No. 9,123,456 in view of U.S. Patent No. 8,765,432
+
+Examiner Findings:
+
+US 9,123,456 discloses:
+- receiving legal documents
+- generating relevance scores based on similarity and usage metrics
+- ranking documents in a list
+- displaying ranked results
+- updating rankings based on user interaction
+
+US 8,765,432 discloses:
+- citation-based scoring of legal documents
+- ranking based on citation frequency within a legal corpus
+- combining citation metrics with similarity-based ranking techniques
+
+The combination renders Claim 1 obvious under §103.

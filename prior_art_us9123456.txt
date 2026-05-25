@@ -1,0 +1,19 @@
+U.S. Patent No. 9,123,456
+
+Title: Method for Ranking Digital Documents Based on Relevance Metrics
+
+Abstract:
+A system for ranking digital documents using similarity scoring and usage-based weighting.
+
+Column 3, Lines 10–60:
+
+The system receives multiple digital documents associated with a dataset. A query is processed to generate a similarity score for each document based on textual similarity between the query and document content.
+
+Documents are assigned a relevance score based on:
+- similarity to query vector representation
+- frequency of document access
+- recency of document modification
+
+The system ranks documents according to computed relevance scores and displays the ranked list in a user interface.
+
+The ranking is updated dynamically when user interactions occur, including clicks, scrolling behavior, and time spent viewing a document.

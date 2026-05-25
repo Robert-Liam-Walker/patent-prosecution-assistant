@@ -1,0 +1,22 @@
+U.S. Patent Application No. 17/555,111 (Test Case 1)
+
+Title: System for Adaptive Legal Document Ranking with Dynamic Reweighting
+
+CLAIM 1:
+
+A computer-implemented method comprising:
+
+(a) receiving a plurality of legal documents associated with a case file;
+
+(b) generating a relevance score for each legal document based on:
+    (i) semantic similarity between a user query and content of each legal document,
+    (ii) recency of each legal document within the case file, and
+    (iii) citation frequency of each legal document within a legal corpus;
+
+(c) ranking the plurality of legal documents based on the relevance scores;
+
+(d) displaying a ranked list of legal documents in a graphical user interface;
+
+(e) updating the relevance scores dynamically based on user interaction with the displayed documents;
+
+wherein the relevance score is recalculated after each user interaction event.

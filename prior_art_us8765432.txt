@@ -1,0 +1,18 @@
+U.S. Patent No. 8,765,432
+
+Title: System for Prioritizing Legal Documents Using Citation Networks
+
+Abstract:
+A system for ranking legal documents based on citation relationships and usage frequency.
+
+Column 2, Lines 15–55:
+
+Legal documents within a corpus are assigned importance scores based on citation frequency within a legal database.
+
+Documents that are frequently cited by other legal documents receive higher priority scores.
+
+The system may adjust rankings based on user interaction history and document popularity over time.
+
+A ranked list of legal documents is generated and displayed to a user interface.
+
+The system may combine citation-based scoring with similarity-based ranking techniques known in the art.
