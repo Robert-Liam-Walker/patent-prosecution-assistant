@@ -5,16 +5,12 @@ import { chatModel } from "@/lib/llm";
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUserId } from "@/lib/auth";
-import {
-  DRAFT_MOTION_PROMPT,
-  DRAFT_EMAIL_PROMPT,
-  PREDICT_NEXT_ACTION_PROMPT,
-  SUMMARIZE_STATUS_PROMPT,
-  SYSTEM_PROMPT,
-  NO_SOURCES_NOTE,
-} from "@/lib/prompts";
+import { DRAFT_EMAIL_PROMPT, SYSTEM_PROMPT, NO_SOURCES_NOTE } from "@/lib/prompts";
 import { retrieve, formatContext, type RetrievedChunk } from "@/lib/rag";
 import { getApplicationStatus } from "@/lib/uspto";
+import { draftNextMotion as draftNextMotionStructured, renderDraftedMotionMarkdown } from "@/lib/draft-motion";
+import { predictNextAction as predictNextActionStructured, renderPredictedActionMarkdown } from "@/lib/predict-action";
+import { getCaseStatus as getCaseStatusStructured, renderCaseStatusMarkdown } from "@/lib/case-status";
 
 type ActionResult = { ok: true; output: string } | { ok: false; error: string };
 
@@ -47,7 +43,7 @@ async function withRetrievedContext(
   caseId: string,
   query: string,
 ): Promise<{ ctx: string; chunks: RetrievedChunk[] }> {
-  const chunks = await retrieve(query, { caseId, k: 10 });
+  const chunks = await retrieve(query, { caseId, kCase: 8, kGlobal: 6 });
   return { ctx: formatContext(chunks), chunks };
 }
 
@@ -58,21 +54,21 @@ function systemFor(chunks: RetrievedChunk[]): string {
 export async function draftNextMotion(caseId: string): Promise<ActionResult> {
   try {
     const summary = await loadCaseSummary(caseId);
-    const { ctx, chunks } = await withRetrievedContext(
+    const { chunks } = await withRetrievedContext(
       caseId,
-      "outstanding rejections; next required filing under MPEP",
+      "outstanding rejections; next required filing; office action response",
     );
-    const { text } = await generateText({
-      model: chatModel,
-      system: systemFor(chunks),
-      prompt: `${DRAFT_MOTION_PROMPT(summary)}\n\nSources:\n${ctx || "(none retrieved)"}`,
-    });
-    return { ok: true, output: text };
+    const result = await draftNextMotionStructured(summary, chunks);
+    return { ok: true, output: renderDraftedMotionMarkdown(result) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
+// Email drafting hasn't been migrated to structured output — it stays
+// on freeform generateText because the schema would be minimal
+// (recipient/subject/body) and the freeform prompt already works well
+// enough. Revisit if hallucination becomes an issue.
 export async function draftNextEmail(caseId: string): Promise<ActionResult> {
   try {
     const summary = await loadCaseSummary(caseId);
@@ -94,16 +90,12 @@ export async function draftNextEmail(caseId: string): Promise<ActionResult> {
 export async function predictNextAction(caseId: string): Promise<ActionResult> {
   try {
     const summary = await loadCaseSummary(caseId);
-    const { ctx, chunks } = await withRetrievedContext(
+    const { chunks } = await withRetrievedContext(
       caseId,
-      "office action history; rejections; examiner patterns",
+      "office action history; rejections; examiner patterns; finality",
     );
-    const { text } = await generateText({
-      model: chatModel,
-      system: systemFor(chunks),
-      prompt: `${PREDICT_NEXT_ACTION_PROMPT(summary)}\n\nSources:\n${ctx || "(none retrieved)"}`,
-    });
-    return { ok: true, output: text };
+    const result = await predictNextActionStructured(summary, chunks);
+    return { ok: true, output: renderPredictedActionMarkdown(result) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -130,12 +122,8 @@ export async function getStatus(caseId: string): Promise<ActionResult> {
     }
 
     const summary = await loadCaseSummary(caseId);
-    const { text } = await generateText({
-      model: chatModel,
-      system: SYSTEM_PROMPT,
-      prompt: SUMMARIZE_STATUS_PROMPT(usptoText, summary),
-    });
-    return { ok: true, output: text };
+    const result = await getCaseStatusStructured(usptoText, summary);
+    return { ok: true, output: renderCaseStatusMarkdown(result) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

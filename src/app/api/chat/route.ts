@@ -2,6 +2,11 @@ import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { chatModel } from "@/lib/llm";
 import { SYSTEM_PROMPT, NO_SOURCES_NOTE } from "@/lib/prompts";
 import { retrieve, formatContext } from "@/lib/rag";
+import {
+  analyzeRejection,
+  isRejectionAnalysisQuery,
+  renderAnalysisMarkdown,
+} from "@/lib/analyze-rejection";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -30,14 +35,45 @@ export async function POST(req: Request) {
 
   let contextBlock = "";
   let sourcesFound = false;
+  let retrievedChunks: Awaited<ReturnType<typeof retrieve>> = [];
   if (lastUserText) {
-    const chunks = await retrieve(lastUserText, {
+    retrievedChunks = await retrieve(lastUserText, {
       caseId: parsed.data.caseId ?? null,
-      k: 8,
+      // Per-scope budgets: case docs need their own slots, otherwise generic
+      // statute/MPEP chunks dominate the top-k for case-specific queries.
+      kCase: 8,
+      kGlobal: 6,
     });
-    if (chunks.length > 0) {
+    if (retrievedChunks.length > 0) {
       sourcesFound = true;
-      contextBlock = `\n\nRetrieved sources:\n${formatContext(chunks)}`;
+      contextBlock = `\n\nRetrieved sources:\n${formatContext(retrievedChunks)}`;
+    }
+  }
+
+  // Route §102/§103 rejection-analysis queries through the structured
+  // analyzer (generateObject + Zod). Narrative prompts on Llama 3.1 8B
+  // kept emitting banned terminology and skipping the (A)–(E) template
+  // (see backlog 4a/4b/4c). Schema enums + slot-filling make label drift
+  // structurally impossible. Falls back to freeform streamText if the
+  // structured pass throws (e.g. JSON parse failure on small models).
+  if (
+    sourcesFound &&
+    lastUserText &&
+    isRejectionAnalysisQuery(lastUserText, retrievedChunks)
+  ) {
+    try {
+      const analysis = await analyzeRejection(lastUserText, retrievedChunks);
+      const markdown = renderAnalysisMarkdown(analysis);
+      const stream = streamText({
+        model: chatModel,
+        messages: [
+          { role: "user", content: `Repeat the following markdown verbatim, exactly as given. Do not add commentary, headers, or any other text.\n\n${markdown}` },
+        ],
+      });
+      return stream.toUIMessageStreamResponse();
+    } catch (err) {
+      console.error("[chat] analyzeRejection failed, falling back to freeform", err);
+      // fall through to streamText below
     }
   }
 
