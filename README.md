@@ -4,40 +4,110 @@ A ChatGPT-style legal-LLM tool for patent prosecutors. Per-case workspace, docum
 
 ## Stack
 
-Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Vercel AI SDK v5 · Drizzle ORM · Postgres + pgvector · Qwen2.5-72B via Together AI · OpenAI embeddings · Cloudflare R2 · USPTO Open Data Portal.
+Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Vercel AI SDK v6 · Drizzle ORM · Postgres + pgvector · **local Ollama** (Llama 3.1 8B chat + mxbai-embed-large embeddings, 1024 dims) · Cloudflare R2 · USPTO Open Data Portal.
+
+Local-first: no third-party LLM API keys required to run. Swap to hosted Claude / OpenAI by changing the provider in `src/lib/llm.ts` and `src/lib/embed.ts` (see CLAUDE.md → "Swapping Ollama → hosted").
 
 ## Setup
 
-1. Postgres with pgvector:
+1. **Postgres with pgvector** (one-time):
    ```bash
    docker run -d --name patent-pg -p 5432:5432 \
      -e POSTGRES_PASSWORD=dev pgvector/pgvector:pg16
    ```
    Or use [Neon](https://neon.tech) — free, supports pgvector.
 
-2. Copy env:
+2. **Ollama** (one-time, ~5.4 GB on disk):
    ```bash
-   cp .env.example .env.local
-   # Fill in TOGETHER_API_KEY, OPENAI_API_KEY, USPTO_ODP_KEY, R2 keys, DATABASE_URL
+   brew services start ollama
+   ollama pull llama3.1:8b           # chat model
+   ollama pull mxbai-embed-large     # embeddings (1024 dims)
    ```
 
-3. Push schema:
+3. **Env + schema**:
    ```bash
+   cp .env.example .env.local        # fill in DATABASE_URL, USPTO_ODP_KEY, R2 keys
+   npm install
    npm run db:push
    ```
 
-4. Dev server:
+4. **Dev server**:
    ```bash
-   npm run dev
+   npm run dev                       # http://localhost:3000
    ```
 
-Visit http://localhost:3000.
+## Seeding the global corpus
 
-## Project status
+The chat/predefined-actions are grounded retrieval — they only work well once the corpus is seeded. Each fetcher supports `--dry-run` for previewing without DB writes and `--clear-existing` for idempotent reseeds.
 
-Scaffolded skeleton. UI works, schema is real, LLM and USPTO clients are wired but the global corpus is empty until ingestion scripts (`scripts/ingest/`) are completed.
+```bash
+# MPEP — current USPTO HTML
+npm run ingest:mpep -- --section 2131 --clear-existing
+npm run ingest:mpep -- --chapter 2100 --clear-existing
 
-See `CLAUDE.md` for the detailed architecture and known TODOs.
+# 35 U.S.C. — Cornell LII
+npm run ingest:usc  -- --core --clear-existing          # 20 most-cited sections
+npm run ingest:usc  -- --part II --clear-existing       # entire Part II (patentability)
+
+# 37 C.F.R. — eCFR Versioner API
+npm run ingest:cfr  -- --clear-existing                 # default parts 1, 11, 41, 42
+npm run ingest:cfr  -- --part 1 --clear-existing
+
+# PTAB precedential / informative decisions — PDF
+npm run ingest:ptab -- --designation precedential --clear-existing
+npm run ingest:ptab -- --filter "Aqua|Apple"
+
+# Federal Circuit opinions — PDF (most-recent ~25 only)
+npm run ingest:fed-circuit -- --limit 5 --clear-existing
+npm run ingest:fed-circuit -- --origin all
+
+# Ingest local .txt / .md files into the global corpus
+npm run ingest:local -- --path ./corpus/mpep-2106.txt --doc-type mpep --citation "MPEP 2106"
+```
+
+Source choices (where it's not obvious): Cornell LII for USC because uscode.house.gov is JSF-rendered; eCFR for CFR via the documented JSON/XML versioner API; www.cafc.uscourts.gov for Federal Circuit because CourtListener now requires an API token. Details in `memory/corpus-source-decisions.md`.
+
+## USPTO Open Data Portal
+
+`USPTO_ODP_KEY` in `.env.local` unlocks the patent file-wrapper endpoints (`/applications/{n}/meta-data`, `/documents`, search). Smoke-test a key without printing it:
+
+```bash
+npm run uspto:status -- --application 18045436
+```
+
+## Backlog
+
+`backlog.txt` at repo root is the ordered, in-place status list. It mirrors a live kanban board on EC2 (panini board id=2). Status prefixes:
+
+- `[DONE]` — shipped
+- `[WIP]`  — currently being worked on
+- `[TODO]` — not started
+
+When you start or finish a backlog item, update both `backlog.txt` and the kanban board (helpers in `scripts/kanban/`, gitignored). See `CLAUDE.md` → "Tracking discipline" for the workflow.
+
+Currently done: all four corpus fetchers (35 USC, 37 CFR, PTAB, Fed Cir). Next up: structured output schemas for the predefined actions, citation verification post-pass, reranker.
+
+## Project layout
+
+```
+src/
+  app/                # Next.js App Router (routes, server actions, API)
+  lib/
+    auth.ts           # single-user stub (Auth.js v5 swap-in is backlogged)
+    chunk.ts          # text splitter
+    embed.ts          # local Ollama embeddings
+    llm.ts            # local Ollama chat model
+    prompts.ts        # GROUNDED / FRAMEWORK / OUT-OF-SCOPE system prompts
+    rag.ts            # pgvector cosine retrieval (filters by case_id)
+    uspto.ts          # ODP client (24h TTL cache in uspto_cache table)
+    db/schema.ts      # Drizzle schema (chunks table is the vector store)
+scripts/
+  ingest/             # corpus fetchers + shared embedding pipeline
+  uspto/              # ODP smoke tests
+  kanban/             # local kanban admin helpers (gitignored)
+backlog.txt           # ordered work list — see "Backlog" above
+CLAUDE.md             # agent / contributor notes (architecture, gotchas, swap recipes)
+```
 
 ## License
 

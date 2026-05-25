@@ -11,6 +11,10 @@
     "db:studio": "drizzle-kit studio",
     "ingest:local": "tsx scripts/ingest/local.ts",
     "ingest:mpep": "tsx scripts/ingest/fetch_mpep.ts",
+    "ingest:usc": "tsx scripts/ingest/fetch_usc.ts",
+    "ingest:cfr": "tsx scripts/ingest/fetch_cfr.ts",
+    "ingest:ptab": "tsx scripts/ingest/fetch_ptab.ts",
+    "ingest:fed-circuit": "tsx scripts/ingest/fetch_fed_circuit.ts",
     "uspto:status": "tsx scripts/uspto/status.ts",
     "typecheck": "tsc --noEmit"
   },
