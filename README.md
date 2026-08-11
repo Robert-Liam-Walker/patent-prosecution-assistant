@@ -2,6 +2,30 @@
 
 A ChatGPT-style legal-LLM tool for patent prosecutors. Per-case workspace, document upload, predefined actions ("draft next motion", "predict next USPTO action"), grounded in a public-domain corpus of MPEP, 35 USC, 37 CFR, PTAB, and Federal Circuit caselaw.
 
+## Screenshots
+
+All three are live captures of the running app — local Llama 3.1 8B over a pgvector corpus of MPEP §§ 2131/2143 and the 20 most-cited 35 U.S.C. sections, plus three uploaded case documents. No mockups.
+
+### Global research — grounded, no active case
+
+Retrieval over the global corpus only. Answers open with the source label the system prompt assigns (`BINDING` for statute/regulation, `PERSUASIVE` for MPEP guidance).
+
+![Global research chat answering a 35 U.S.C. 102 anticipation question, citing the statute as BINDING and quoting Verdegaal Bros. v. Union Oil](docs/screenshots/01-global-research.jpg)
+
+### Case workspace — uploaded docs + corpus
+
+Per-case view: predefined-action bar, document panel with per-file chunk counts, and a chat that searches the case's own documents alongside the global corpus.
+
+![Case workspace for application 17/123,456 with three uploaded documents and a chat answer breaking down claim 1](docs/screenshots/02-case-workspace.jpg)
+
+### Predefined actions — structured output
+
+`Predict next USPTO action` returns a typed prediction (action, probability, reasoning, alternatives) with each finding attributed to the case document it came from.
+
+![Predict next USPTO action dialog predicting FINAL_OA with HIGH probability, citing office_action.txt and prior_art_us9123456.txt](docs/screenshots/03-predict-next-action.jpg)
+
+Two known rough edges are visible in these shots and are on the backlog: assistant output is rendered as plain text, so Markdown `**bold**` shows literally, and the 8B model still emits the occasional section number that isn't in the retrieved set (the citation-verification post-pass is the fix).
+
 ## Stack
 
 Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Vercel AI SDK v6 · Drizzle ORM · Postgres + pgvector · **local Ollama** (Llama 3.1 8B chat + mxbai-embed-large embeddings, 1024 dims) · Cloudflare R2 · USPTO Open Data Portal.
