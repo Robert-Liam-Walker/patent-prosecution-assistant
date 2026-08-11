@@ -8,41 +8,6 @@ A general-purpose chatbot answers patent-law questions fluently and wrongly, inv
 
 Everything runs on local Ollama, so no LLM API keys are required and no client document leaves the machine.
 
-## What's New
-
-- Structured analyzers for rejections, motions, next-action prediction, and case status, returning typed objects instead of prose
-- Grounding fix so a case keeps its own documents in context instead of being pushed out by the global corpus
-- Global-corpus fetchers for 35 U.S.C., 37 C.F.R., PTAB, and Federal Circuit, joining the existing MPEP fetcher
-- Prior-art mapping that grades each claim limitation and downgrades any finding whose quote cannot be matched verbatim in the reference
-- USPTO Open Data Portal client with a 24h TTL cache
-- Eval harnesses, diagnostic scripts, and test fixtures for the analyzers
-- Chat model moved to Llama 3.1 8B and the whole stack moved off hosted inference to local Ollama
-
-## Core Features
-
-- Create a case, upload its documents, and have them chunked and embedded automatically
-- Ask questions answered from retrieved text, with a source label on every assertion
-- Search the case's own documents and the global corpus together, or research the corpus alone
-- Draft the next motion, draft the next client email, predict the next USPTO action, and get case status
-- Seed the corpus from official sources with per-fetcher dry-run and idempotent reseed flags
-- Look up live application data from the USPTO Open Data Portal
-
-## Tech Stack
-
-- Next.js 16 and React 19
-- TypeScript
-- Tailwind v4 and shadcn/ui
-- Vercel AI SDK v6
-- Drizzle ORM
-- Postgres with pgvector
-- Local Ollama (Llama 3.1 8B chat, mxbai-embed-large embeddings at 1024 dims)
-- Cloudflare R2, with a local filesystem fallback
-- USPTO Open Data Portal
-
-Swapping to a hosted provider is a two-file change: `src/lib/llm.ts` and `src/lib/embed.ts`.
-
-## Screens
-
 Live captures of the running app, not mockups: local Llama 3.1 8B over a pgvector corpus of MPEP §§ 2131/2143 and the 20 most-cited 35 U.S.C. sections, plus three uploaded case documents.
 
 ### Global Research
@@ -68,6 +33,29 @@ Per-case view with the predefined-action bar, a document panel showing per-file 
 <p align="center">
   <img src="docs/screenshots/03-predict-next-action.jpg" width="720" alt="Predict next USPTO action dialog predicting FINAL_OA with HIGH probability, citing office_action.txt and prior_art_us9123456.txt">
 </p>
+
+## Core Features
+
+- Create a case, upload its documents, and have them chunked and embedded automatically
+- Ask questions answered from retrieved text, with a source label on every assertion
+- Search the case's own documents and the global corpus together, or research the corpus alone
+- Draft the next motion, draft the next client email, predict the next USPTO action, and get case status
+- Seed the corpus from official sources with per-fetcher dry-run and idempotent reseed flags
+- Look up live application data from the USPTO Open Data Portal
+
+## Tech Stack
+
+- Next.js 16 and React 19
+- TypeScript
+- Tailwind v4 and shadcn/ui
+- Vercel AI SDK v6
+- Drizzle ORM
+- Postgres with pgvector
+- Local Ollama (Llama 3.1 8B chat, mxbai-embed-large embeddings at 1024 dims)
+- Cloudflare R2, with a local filesystem fallback
+- USPTO Open Data Portal
+
+Swapping to a hosted provider is a two-file change: `src/lib/llm.ts` and `src/lib/embed.ts`.
 
 ## Project Structure
 
