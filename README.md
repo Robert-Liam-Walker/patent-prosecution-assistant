@@ -6,7 +6,7 @@ A ChatGPT-style legal-LLM tool for patent prosecutors. Per-case workspace, docum
 
 Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Vercel AI SDK v6 · Drizzle ORM · Postgres + pgvector · **local Ollama** (Llama 3.1 8B chat + mxbai-embed-large embeddings, 1024 dims) · Cloudflare R2 · USPTO Open Data Portal.
 
-Local-first: no third-party LLM API keys required to run. Swap to hosted Claude / OpenAI by changing the provider in `src/lib/llm.ts` and `src/lib/embed.ts` (see CLAUDE.md → "Swapping Ollama → hosted").
+Local-first: no third-party LLM API keys required to run. Swap to a hosted provider by changing the provider in `src/lib/llm.ts` and `src/lib/embed.ts`.
 
 ## Setup
 
@@ -83,7 +83,7 @@ npm run uspto:status -- --application 18045436
 - `[WIP]`  — currently being worked on
 - `[TODO]` — not started
 
-When you start or finish a backlog item, update both `backlog.txt` and the kanban board (helpers in `scripts/kanban/`, gitignored). See `CLAUDE.md` → "Tracking discipline" for the workflow.
+When you start or finish a backlog item, update both `backlog.txt` and the kanban board (helpers in `scripts/kanban/`, gitignored).
 
 Currently done: all four corpus fetchers (35 USC, 37 CFR, PTAB, Fed Cir). Next up: structured output schemas for the predefined actions, citation verification post-pass, reranker.
 
@@ -106,7 +106,6 @@ scripts/
   uspto/              # ODP smoke tests
   kanban/             # local kanban admin helpers (gitignored)
 backlog.txt           # ordered work list — see "Backlog" above
-CLAUDE.md             # agent / contributor notes (architecture, gotchas, swap recipes)
 ```
 
 ## License
