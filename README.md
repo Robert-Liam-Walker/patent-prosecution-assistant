@@ -4,25 +4,9 @@ A ChatGPT-style legal-LLM tool for patent prosecutors. Per-case workspace, docum
 
 ## About
 
-Patent prosecution runs on a body of public-domain law (the MPEP, Title 35, 37 C.F.R., PTAB decisions, Federal Circuit opinions) that is large, heavily cross-referenced, and tedious to search by hand. A general-purpose chatbot answers questions about it fluently and wrongly, inventing section numbers that sound right. This project is the opposite bet: retrieve first from a corpus of the actual text, then make the model answer only from what came back.
+A general-purpose chatbot answers patent-law questions fluently and wrongly, inventing section numbers that sound right. This project takes the opposite bet: retrieve first from the actual public-domain text, then answer only from what came back. Retrieval picks the answer mode, not the model. GROUNDED when sources exist, with each assertion labeled `BINDING` for statute and regulation or `PERSUASIVE` for MPEP guidance; FRAMEWORK only when retrieval returns nothing, so a gap is stated rather than filled.
 
-Every answer runs in one of three modes, chosen by what retrieval returned rather than by the model's judgment:
-
-- **GROUNDED** when any sources were retrieved. Each assertion carries the source it came from, labeled `BINDING` for statute and regulation or `PERSUASIVE` for MPEP guidance.
-- **FRAMEWORK** only when retrieval returned zero sources. The model gives the analytical structure and states plainly that it has no sources, instead of filling the gap.
-- **OUT-OF-SCOPE** for anything that is not a patent-prosecution question.
-
-That binary FRAMEWORK rule is deliberate. An earlier version dropped into FRAMEWORK whenever any single load-bearing document was missing, which meant a case with all four of its documents indexed could still be told "claim text not in retrieved sources."
-
-On top of the chat sit predefined actions that return typed objects rather than prose: draft the next motion, predict the next USPTO action, get case status. The prior-art mapping in particular grades each claim limitation as disclosed, partially disclosed, or not disclosed, and downgrades any finding whose supporting quote cannot be matched verbatim in the reference.
-
-**Who it is for:** a solo practitioner or small firm that wants a case workspace over their own file wrapper without shipping client documents to a third-party API. It runs entirely on local Ollama, so no LLM keys are required and no document leaves the machine. Swapping to a hosted provider is a two-file change (`src/lib/llm.ts`, `src/lib/embed.ts`).
-
-**Status:** working prototype, single-user. The UI, schema, retrieval, streaming chat, upload and embedding pipeline, all five corpus fetchers, and the structured analyzers are built and run end to end. Auth is a hardcoded stub, chat has no conversation memory across turns, and there is no citation-verification pass yet, so a wrong section number can still reach the user. Ordered work list in `backlog.txt`.
-
-## Screenshots
-
-All three are live captures of the running app: local Llama 3.1 8B over a pgvector corpus of MPEP §§ 2131/2143 and the 20 most-cited 35 U.S.C. sections, plus three uploaded case documents. No mockups.
+Screenshots below are live captures of the running app, not mockups: local Llama 3.1 8B over a pgvector corpus of MPEP §§ 2131/2143 and the 20 most-cited 35 U.S.C. sections, plus three uploaded case documents.
 
 ### Global research: grounded, no active case
 
@@ -42,7 +26,9 @@ Per-case view: predefined-action bar, document panel with per-file chunk counts,
 
 ![Predict next USPTO action dialog predicting FINAL_OA with HIGH probability, citing office_action.txt and prior_art_us9123456.txt](docs/screenshots/03-predict-next-action.jpg)
 
-Two known rough edges are visible in these shots and are on the backlog: assistant output is rendered as plain text, so Markdown `**bold**` shows literally, and the 8B model still emits the occasional section number that isn't in the retrieved set (the citation-verification post-pass is the fix).
+**Who it is for:** a solo practitioner or small firm wanting a case workspace over their own file wrapper without shipping client documents to a third-party API. Everything runs on local Ollama, so no LLM keys are required and no document leaves the machine. Swapping to a hosted provider is a two-file change (`src/lib/llm.ts`, `src/lib/embed.ts`).
+
+**Status:** working prototype, single-user. UI, schema, retrieval, streaming chat, upload and embedding, all five corpus fetchers, and the structured analyzers run end to end. Auth is a stub and chat has no memory across turns. Two rough edges are visible in the shots above: output renders as plain text, so Markdown `**bold**` shows literally, and with no citation-verification pass yet the 8B model still emits the occasional section number that isn't in the retrieved set. Ordered work list in `backlog.txt`.
 
 ## Stack
 
