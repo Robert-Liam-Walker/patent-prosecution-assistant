@@ -4,21 +4,21 @@ A ChatGPT-style legal-LLM tool for patent prosecutors. Per-case workspace, docum
 
 ## Screenshots
 
-All three are live captures of the running app — local Llama 3.1 8B over a pgvector corpus of MPEP §§ 2131/2143 and the 20 most-cited 35 U.S.C. sections, plus three uploaded case documents. No mockups.
+All three are live captures of the running app: local Llama 3.1 8B over a pgvector corpus of MPEP §§ 2131/2143 and the 20 most-cited 35 U.S.C. sections, plus three uploaded case documents. No mockups.
 
-### Global research — grounded, no active case
+### Global research: grounded, no active case
 
 Retrieval over the global corpus only. Answers open with the source label the system prompt assigns (`BINDING` for statute/regulation, `PERSUASIVE` for MPEP guidance).
 
 ![Global research chat answering a 35 U.S.C. 102 anticipation question, citing the statute as BINDING and quoting Verdegaal Bros. v. Union Oil](docs/screenshots/01-global-research.jpg)
 
-### Case workspace — uploaded docs + corpus
+### Case workspace: uploaded docs + corpus
 
 Per-case view: predefined-action bar, document panel with per-file chunk counts, and a chat that searches the case's own documents alongside the global corpus.
 
 ![Case workspace for application 17/123,456 with three uploaded documents and a chat answer breaking down claim 1](docs/screenshots/02-case-workspace.jpg)
 
-### Predefined actions — structured output
+### Predefined actions: structured output
 
 `Predict next USPTO action` returns a typed prediction (action, probability, reasoning, alternatives) with each finding attributed to the case document it came from.
 
