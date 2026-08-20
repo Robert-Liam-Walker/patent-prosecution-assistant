@@ -8,9 +8,15 @@ const HEADER_SPLITTERS = [
   /\n(?=\s*§\s*\d+(?:\.\d+)?)/g, // statute/reg sections
   /\n(?=MPEP\s+§)/gi, // MPEP refs
   /\n(?=[A-Z][A-Z\s]{4,}\n)/g, // ALL CAPS HEADERS
+  // Bracketed paragraph numbers, e.g. [0001]. This is the canonical paragraph
+  // boundary in a published application or a drafted specification. Without it
+  // a generated application chunks on character count alone and splits mid
+  // paragraph, which makes support citations harder to trace back.
+  /\n(?=\[\d{4}\])/g,
 ];
 
-// Keep chunks under the local embedding context on dense legal text.
+// Chunk size. Well under voyage-law-2's 16k-token context; the limit that
+// actually binds is retrieval precision, not the model context.
 const TARGET_CHARS = 1000;
 const OVERLAP_CHARS = 200;
 

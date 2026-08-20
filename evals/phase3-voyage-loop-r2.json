@@ -1,0 +1,157 @@
+{
+  "harness": "eval_loop",
+  "label": "phase3-voyage-r2",
+  "createdAt": "2026-08-20T14:35:35.386Z",
+  "model": "claude-opus-5 + claude-sonnet-5 + claude-haiku-4-5",
+  "embedModel": "voyage:voyage-law-2",
+  "totals": {
+    "all": {
+      "pass": 22,
+      "total": 22
+    },
+    "capability": {
+      "pass": 21,
+      "total": 21
+    },
+    "workaround": {
+      "pass": 1,
+      "total": 1
+    }
+  },
+  "cards": [
+    {
+      "testId": "primary-102-103",
+      "id": "primary-102-103",
+      "routed": "structured",
+      "checks": [
+        {
+          "name": "routing matches expectation",
+          "pass": true,
+          "detail": "routed=structured, expected=structured",
+          "kind": "capability"
+        },
+        {
+          "name": "generateObject succeeds",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "header present: (A) CLAIM BREAKDOWN",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "header present: (B) PRIOR ART MAPPING",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "header present: (C) §102 VERDICT",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "header present: (D) §103 ANALYSIS",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "header present: (E) CONCLUSION",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "no banned term: \\bfully\\s+anticipat(?:ed|ion)\\b",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "no banned term: \\bpartial(?:ly)?\\s+anticipat(?:ed|ion)\\b",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "no banned term: \\bpartial\\s+§\\s*102\\b",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "no banned term: \\bessentially\\s+disclosed\\b",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "all disclosure labels are DISCLOSED|PARTIALLY_DISCLOSED|NOT_DISCLOSED",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "s102Satisfied matches limitation labels (binary verdict over 3-tier labels)",
+          "pass": true,
+          "detail": "s102Satisfied=false, allDisclosed=false",
+          "kind": "capability"
+        },
+        {
+          "name": "s102FailingLimitationIds includes all non-DISCLOSED limitations",
+          "pass": true,
+          "detail": "actual=[(a),(b)(i),(b)(ii),(b)(iii),(e),(wherein)] claimed=[(a),(b)(i),(b)(ii),(b)(iii),(e),(wherein)]",
+          "kind": "capability"
+        },
+        {
+          "name": "§103 has at least one reference contribution when secondary cited and §102 fails",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "claimText quoted verbatim from retrieved case docs",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "kind": "workaround",
+          "name": "all evidence quotes appear verbatim in retrieved chunks",
+          "pass": true
+        },
+        {
+          "name": "s103Sustainable=false when §102 fails AND no motivation in record",
+          "pass": true,
+          "detail": "s102Satisfied=false s103MotivationInRecord=false s103Sustainable=false",
+          "kind": "capability"
+        },
+        {
+          "name": "ground truth: s102Satisfied == false",
+          "pass": true,
+          "detail": "got false",
+          "kind": "capability"
+        },
+        {
+          "name": "ground truth: at least one of [(b)(ii)|(b)(iii)] is non-DISCLOSED",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "ground truth: [(b)(i),(e)] should be PARTIALLY or NOT_DISCLOSED (over/under-strict guard)",
+          "pass": true,
+          "kind": "capability"
+        }
+      ],
+      "passCount": 21,
+      "totalCount": 21
+    },
+    {
+      "testId": "general-question",
+      "id": "general-question",
+      "routed": "freeform",
+      "checks": [
+        {
+          "name": "routing matches expectation",
+          "pass": true,
+          "detail": "routed=freeform, expected=freeform",
+          "kind": "capability"
+        }
+      ],
+      "passCount": 1,
+      "totalCount": 1
+    }
+  ]
+}

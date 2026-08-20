@@ -9,6 +9,7 @@
 
 import { db, schema } from "@/lib/db";
 import { embedQuery } from "@/lib/embed";
+import { assertEmbeddingsMatch } from "@/lib/embed-guard";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 export interface RetrievedChunk {
@@ -81,6 +82,9 @@ export async function retrieve(
   const kGlobal = opts.kGlobal ?? (legacyK !== undefined ? (caseId ? Math.ceil(legacyK / 2) : legacyK) : 6);
   const kCase = opts.kCase ?? (legacyK !== undefined ? Math.floor(legacyK / 2) : 8);
 
+  // Refuse to search a store written by a different embedding model rather
+  // than returning silently-wrong neighbours. See src/lib/embed-guard.ts.
+  await assertEmbeddingsMatch();
   const queryEmbedding = await embedQuery(query);
   const literal = `[${queryEmbedding.join(",")}]`;
 

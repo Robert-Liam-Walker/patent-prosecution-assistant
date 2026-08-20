@@ -1,0 +1,184 @@
+{
+  "harness": "eval_actions",
+  "label": "phase3-voyage-r1",
+  "createdAt": "2026-08-20T14:35:14.297Z",
+  "model": "claude-opus-5 + claude-sonnet-5 + claude-haiku-4-5",
+  "embedModel": "voyage:voyage-law-2",
+  "totals": {
+    "all": {
+      "pass": 25,
+      "total": 25
+    },
+    "capability": {
+      "pass": 25,
+      "total": 25
+    },
+    "workaround": {
+      "pass": 0,
+      "total": 0
+    }
+  },
+  "cards": [
+    {
+      "id": "draftNextMotion",
+      "checks": [
+        {
+          "name": "generateObject succeeds",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "render produces non-empty markdown",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "nextDocumentType is a sanctioned enum value",
+          "pass": true,
+          "detail": "got \"RESPONSE_NON_FINAL_OA\"",
+          "kind": "capability"
+        },
+        {
+          "name": "plausible doc type given an active §102/§103 rejection",
+          "pass": true,
+          "detail": "got \"RESPONSE_NON_FINAL_OA\"",
+          "kind": "capability"
+        },
+        {
+          "name": "reason for doc type is non-trivial",
+          "pass": true,
+          "detail": "len=164",
+          "kind": "capability"
+        },
+        {
+          "name": "canDraftFromSources is boolean",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "when canDraftFromSources=true, draftBody is substantive (>100 chars)",
+          "pass": true,
+          "detail": "len=4490",
+          "kind": "capability"
+        },
+        {
+          "name": "all cited authorities trace to retrieval (verifyAuthorities)",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "draft body engages specific limitations and references",
+          "pass": true,
+          "kind": "capability"
+        }
+      ],
+      "passCount": 9,
+      "totalCount": 9
+    },
+    {
+      "id": "draftAmendment",
+      "checks": [
+        {
+          "name": "generateObject succeeds",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "render produces non-empty markdown",
+          "pass": true,
+          "detail": "len=9887",
+          "kind": "capability"
+        },
+        {
+          "name": "responseType is a sanctioned enum value",
+          "pass": true,
+          "detail": "REMARKS_ONLY",
+          "kind": "capability"
+        },
+        {
+          "name": "canDraftFromSources=true given an OA and claims are in the record",
+          "pass": true,
+          "detail": "canDraftFromSources=true",
+          "kind": "capability"
+        },
+        {
+          "name": "claim listing is non-empty and includes claim 1",
+          "pass": true,
+          "detail": "claims=[1]",
+          "kind": "capability"
+        },
+        {
+          "name": "claim listing is in ascending order (37 CFR 1.121(c))",
+          "pass": true,
+          "detail": "order=[1]",
+          "kind": "capability"
+        },
+        {
+          "name": "every claim carries a valid 1.121(c) status identifier",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "amended claims carry <u>/<s> change markup",
+          "pass": true,
+          "detail": "amended=0, marked=0",
+          "kind": "capability"
+        },
+        {
+          "name": "no added claim language without written-description support (§132(a))",
+          "pass": true,
+          "detail": "unsupported=0",
+          "kind": "capability"
+        },
+        {
+          "name": "remarks address at least one rejection",
+          "pass": true,
+          "detail": "remarks=2",
+          "kind": "capability"
+        },
+        {
+          "name": "each remark is substantive (>150 chars)",
+          "pass": true,
+          "detail": "3496,3292",
+          "kind": "capability"
+        },
+        {
+          "name": "no untraceable authorities survive verification",
+          "pass": true,
+          "detail": "dropped=0",
+          "kind": "capability"
+        }
+      ],
+      "passCount": 12,
+      "totalCount": 12
+    },
+    {
+      "id": "getCaseStatus",
+      "checks": [
+        {
+          "name": "generateObject succeeds",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "render produces non-empty markdown",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "recommendedNextStep is non-empty",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "applicationNumber matches case record if provided",
+          "pass": true,
+          "detail": "case=\"17/123,456\" model=\"17/123,456\"",
+          "kind": "capability"
+        }
+      ],
+      "passCount": 4,
+      "totalCount": 4
+    }
+  ]
+}
