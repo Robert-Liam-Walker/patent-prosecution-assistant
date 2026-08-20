@@ -230,25 +230,6 @@ If recipient-determining context is missing, say so and STOP rather than guessin
 Case context:
 ${caseSummary}`;
 
-export const PREDICT_NEXT_ACTION_PROMPT = (
-  caseSummary: string,
-  examinerStats?: string,
-) =>
-  `Predict the next likely USPTO action for this application. Anchor each prediction to specific facts in the case context or retrieved sources.
-
-Output:
-1. **Most likely next action** — single bullet, with rough probability (Low/Medium/High) and ONE-SENTENCE reasoning anchored to a fact in context.
-2. **Reasoning** — cite §§ / MPEP / examiner-history facts per CITATION RULES.
-3. **Alternative scenarios** (max 2) — each with anchor.
-4. **Recommended preparation** — bullets, actionable.
-
-If status / OA history / examiner data is not in context, say so and switch to FRAMEWORK mode for that section. Do NOT guess timelines.
-
-Examiner statistics${examinerStats ? `:\n${examinerStats}` : ": NONE PROVIDED — flag in output."}
-
-Case context:
-${caseSummary}`;
-
 export const SUMMARIZE_STATUS_PROMPT = (
   uspto: string,
   uploaded: string,
