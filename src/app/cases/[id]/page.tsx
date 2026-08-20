@@ -1,3 +1,5 @@
+import { FilePlus2 } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +54,16 @@ export default async function CasePage({
           </span>
         )}
       </header>
-      <ActionBar caseId={id} />
+      <div className="flex items-center gap-2">
+        <ActionBar caseId={id} />
+        <Link
+          href={`/cases/${id}/draft`}
+          className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border hover:bg-accent whitespace-nowrap"
+        >
+          <FilePlus2 className="size-4" />
+          Draft application
+        </Link>
+      </div>
       <div className="flex-1 flex min-h-0">
         <div className="flex-1 flex flex-col min-w-0">
           <Chat caseId={id} />

@@ -1,0 +1,93 @@
+INVENTION DISCLOSURE FORM  (FICTIONAL — TEST FIXTURE)
+
+Docket No.:        TESTCO-2026-004
+Date submitted:    2026-03-11
+Inventors:         Dana Okonkwo (lead), Priya Raghunathan
+Business unit:     Thermal Systems
+Disclosure status: Not published, not offered for sale, no prior public use.
+
+--------------------------------------------------------------------------
+1. WORKING TITLE
+--------------------------------------------------------------------------
+Predictive thermal throttling for stacked memory using per-die history
+
+--------------------------------------------------------------------------
+2. PROBLEM WE SET OUT TO SOLVE
+--------------------------------------------------------------------------
+In 3D-stacked memory packages the dies farthest from the heat spreader run
+hotter than the ones nearest to it, but the controller only sees one package
+level temperature reading. When that single sensor trips the thermal limit the
+controller throttles the whole stack. Two things go wrong. Throughput drops on
+dies that were never hot, and the hot interior die has often already spent
+several milliseconds above its reliability limit before the package sensor
+catches up, because heat takes time to reach the spreader.
+
+Existing approaches either add a sensor per die, which costs area and routing
+we do not have, or throttle conservatively all the time, which gives up
+performance we do not want to give up.
+
+--------------------------------------------------------------------------
+3. WHAT WE BUILT
+--------------------------------------------------------------------------
+The controller keeps a small per die activity history rather than a per die
+sensor. For each die in the stack it accumulates a weighted count of the
+activations, reads, and writes issued to that die over a sliding window. Each
+die has a stored coefficient describing how strongly its activity contributes
+to its own junction temperature, and a second set of coefficients describing
+how strongly the die above and the die below contribute to it. The controller
+combines the activity history with those coefficients to produce an estimated
+junction temperature per die, without ever measuring one directly.
+
+When an estimate for any die crosses a threshold, the controller throttles
+only the traffic addressed to that die. It does this by inserting delay
+between commands targeting that die while continuing to issue commands to the
+others at full rate.
+
+The single package sensor is still used, but only as a correction input. On a
+slow cadence the controller compares the package reading to what its model
+predicted for the package as a whole and nudges the coefficients so the two
+agree. That means the model self corrects for a package that was assembled
+slightly differently, or for thermal paste that has degraded over the life of
+the part.
+
+The result we care about: the prediction leads the physical measurement,
+because activity causes heat before heat reaches the sensor. We get to act
+early instead of reacting late.
+
+--------------------------------------------------------------------------
+4. WHAT WE THINK IS NEW
+--------------------------------------------------------------------------
+a) Estimating a per die temperature from a per die activity history plus
+   stored coupling coefficients, rather than measuring it.
+b) Throttling one die in a stack while leaving the others unthrottled.
+c) Using the one real sensor to trim the model over time instead of using it
+   as the trigger.
+
+We are aware of designs that throttle a whole package on a single sensor, and
+of designs that place one sensor per die. We are not aware of anything that
+predicts per die temperature from access history and coupling terms in a
+stacked package.
+
+--------------------------------------------------------------------------
+5. ALTERNATIVES WE CONSIDERED
+--------------------------------------------------------------------------
+- The coupling coefficients can be fixed at manufacture from characterisation
+  data, or learned in the field. Both work. Learned is better for parts that
+  age; fixed is cheaper.
+- The sliding window can be a true window or an exponential moving average.
+  We used the moving average because it costs one register per die.
+- Instead of delaying commands, the controller could remap incoming writes to
+  a cooler die. We prototyped this and it works, but it interacts badly with
+  wear levelling, so we set it aside.
+- The same scheme should apply to stacked logic dies, not only memory.
+
+--------------------------------------------------------------------------
+6. STATUS AND GAPS  (deliberate — this fixture tests gap handling)
+--------------------------------------------------------------------------
+- Simulated across a range of workloads with good results. Silicon
+  measurements are not available yet, so no specific temperature deltas,
+  latency numbers, or throughput figures are recorded here.
+- The exact threshold value, the window length, and the throttle delay are all
+  tunable and were not fixed at the time of this disclosure.
+- No figures have been prepared.
+- No decision yet on whether to file in EP and JP in addition to the US.

@@ -1,20 +1,32 @@
-// Eval harness for the structured predefined actions (predictNextAction
-// / draftNextMotion / getCaseStatus). Separate from eval_loop.ts so the
+// Eval harness for the structured predefined actions (draftNextMotion /
+// getCaseStatus). Separate from eval_loop.ts so the
 // rejection-analyzer eval can stay focused on that chain. Same recipe:
 // programmatic rubric, deterministic checks, score + report.
 
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
+import {
+  parseReportArgs,
+  writeReport,
+  printSplit,
+  describeModels,
+  type CheckKind,
+  type ReportCard,
+} from "./eval-report";
+
 const CASE_WITH_REJECTION = "ea68b684-8f5b-4afa-b4e1-684b48b27707"; // claims2 + 2 prior arts + OA
 const CASE_WITH_APP_NUM = "07d3d4e8-bfc7-42f9-a44a-8458795ba977"; // fake 17/123,456
 
-type Check = { name: string; pass: boolean; detail?: string };
-type Scorecard = { id: string; checks: Check[]; passCount: number; totalCount: number };
+// `kind` defaults to "capability" -- see scripts/eval-report.ts for what the
+// split means and why only capability checks gate a phase.
+type Check = { name: string; pass: boolean; detail?: string; kind?: CheckKind };
+type Scorecard = ReportCard;
 
 function finalize(id: string, checks: Check[]): Scorecard {
-  const passCount = checks.filter((c) => c.pass).length;
-  return { id, checks, passCount, totalCount: checks.length };
+  const normalized = checks.map((c) => ({ ...c, kind: c.kind ?? ("capability" as CheckKind) }));
+  const passCount = normalized.filter((c) => c.pass).length;
+  return { id, checks: normalized, passCount, totalCount: normalized.length };
 }
 
 function printCard(card: Scorecard) {
@@ -45,61 +57,6 @@ async function loadCaseChunksAndSummary(caseId: string, query: string) {
 
   const chunks = await retrieve(query, { caseId, kCase: 8, kGlobal: 6 });
   return { summary, chunks };
-}
-
-async function evalPredictNextAction(): Promise<Scorecard> {
-  const checks: Check[] = [];
-  const { predictNextAction, renderPredictedActionMarkdown } = await import("../src/lib/predict-action");
-
-  const { summary, chunks } = await loadCaseChunksAndSummary(
-    CASE_WITH_REJECTION,
-    "office action history; rejections; examiner patterns; finality",
-  );
-
-  let result;
-  try {
-    result = await predictNextAction(summary, chunks);
-    checks.push({ name: "generateObject succeeds", pass: true });
-  } catch (e) {
-    checks.push({ name: "generateObject succeeds", pass: false, detail: e instanceof Error ? e.message.slice(0, 200) : String(e) });
-    return finalize("predictNextAction", checks);
-  }
-
-  const md = renderPredictedActionMarkdown(result);
-  checks.push({ name: "render produces non-empty markdown", pass: md.trim().length > 50 });
-  checks.push({
-    name: "mostLikelyAction is a sanctioned enum value",
-    pass: ["NON_FINAL_OA","FINAL_OA","NOTICE_OF_ALLOWANCE","NOTICE_OF_ABANDONMENT","ADVISORY_ACTION","EXAMINER_INTERVIEW","EXAMINER_AMENDMENT","REQUIREMENT_FOR_INFORMATION","RESTRICTION_REQUIREMENT","QUAYLE_ACTION","OTHER"].includes(result.mostLikelyAction),
-    detail: `got "${result.mostLikelyAction}"`,
-  });
-  checks.push({
-    name: "probability is LOW | MEDIUM | HIGH",
-    pass: ["LOW","MEDIUM","HIGH"].includes(result.probability),
-    detail: `got "${result.probability}"`,
-  });
-  checks.push({
-    name: "reasoning is substantive (>40 chars)",
-    pass: result.reasoning.trim().length > 40,
-    detail: `len=${result.reasoning.length}`,
-  });
-  checks.push({
-    name: "no fabricated examiner stats (examinerStatsUsed=false expected for this case)",
-    pass: result.examinerStatsUsed === false,
-    detail: `examinerStatsUsed=${result.examinerStatsUsed}`,
-  });
-  // Plausibility: ea68b684 has a §102/§103 OA. Next likely action is
-  // FINAL_OA or NON_FINAL_OA (depending on whether OA is final).
-  checks.push({
-    name: "prediction is plausible for an active rejection case (any OA / advisory / interview / OTHER)",
-    pass: ["NON_FINAL_OA","FINAL_OA","ADVISORY_ACTION","EXAMINER_INTERVIEW","NOTICE_OF_ALLOWANCE","OTHER"].includes(result.mostLikelyAction),
-    detail: `got "${result.mostLikelyAction}"`,
-  });
-  checks.push({
-    name: "at most 2 alternatives",
-    pass: result.alternatives.length <= 2,
-    detail: `len=${result.alternatives.length}`,
-  });
-  return finalize("predictNextAction", checks);
 }
 
 async function evalDraftNextMotion(): Promise<Scorecard> {
@@ -171,14 +128,138 @@ async function evalDraftNextMotion(): Promise<Scorecard> {
     pass: badAuthorities.length === 0,
     detail: badAuthorities.length > 0 ? badAuthorities.join(" | ") : undefined,
   });
-  // Forbidden phrases
-  const forbidden = /(applicant respectfully (submits|traverses)|it is respectfully submitted|rejection should be reconsidered)/i;
+  // Substance check.
+  //
+  // This replaced a phrase blocklist that forbade "applicant respectfully
+  // traverses" and similar. That blocklist was written against Llama 3.1 8B,
+  // which emitted formal-sounding filler INSTEAD of argument, so the phrase was
+  // used as a proxy for "is there real content here". Against a model that
+  // writes like a practitioner the proxy inverts: those phrases are the correct
+  // formal register for a response to an office action, and the check punished
+  // the draft for being professionally worded (it went flaky at 2/3 runs in
+  // phase 2b for exactly this reason).
+  //
+  // So test the thing the proxy stood for. A draft is substantive if it engages
+  // specific claim limitations and names the reference it is arguing against --
+  // which generic filler cannot do by construction. This is strictly harder to
+  // pass than the blocklist was.
+  const body = result.draftBody ?? "";
+  // Limitation identifiers as they appear in these claims: (a), (b)(i), (e)...
+  const citesLimitation = /\([a-z]\)(\s*\((?:i|ii|iii|iv|v)\))?/i.test(body);
+  const namesReference = /(US\s*[\d,]{7,}|9,123,456|8,765,432|prior_art_us\d+)/i.test(body);
+  const isSubstantive = body.length > 300;
+  const substanceProblems = [
+    citesLimitation ? null : "cites no claim limitation identifier",
+    namesReference ? null : "names no prior-art reference",
+    isSubstantive ? null : `too short (${body.length} chars)`,
+  ].filter(Boolean) as string[];
   checks.push({
-    name: "draft body avoids stock boilerplate phrases",
-    pass: !forbidden.test(result.draftBody),
-    detail: forbidden.exec(result.draftBody)?.[0],
+    name: "draft body engages specific limitations and references",
+    pass: substanceProblems.length === 0,
+    detail: substanceProblems.length > 0 ? substanceProblems.join("; ") : undefined,
   });
   return finalize("draftNextMotion", checks);
+}
+
+async function evalDraftAmendment(): Promise<Scorecard> {
+  const checks: Check[] = [];
+  const { analyzeRejection } = await import("../src/lib/analyze-rejection");
+  const { draftAmendment, renderAmendmentMarkdown } = await import("../src/lib/draft-amendment");
+
+  const { summary, chunks } = await loadCaseChunksAndSummary(
+    CASE_WITH_REJECTION,
+    "office action rejection claims amendment 37 CFR 1.121 manner of making amendments prior art",
+  );
+
+  const analysis = await analyzeRejection(
+    "Analyze the outstanding rejection for the purpose of drafting a response.",
+    chunks,
+  );
+
+  let result: Awaited<ReturnType<typeof draftAmendment>>;
+  try {
+    result = await draftAmendment(analysis, summary, chunks);
+    checks.push({ name: "generateObject succeeds", pass: true });
+  } catch (e) {
+    checks.push({ name: "generateObject succeeds", pass: false, detail: String(e) });
+    return finalize("draftAmendment", checks);
+  }
+
+  const md = renderAmendmentMarkdown(result);
+  checks.push({ name: "render produces non-empty markdown", pass: md.length > 200, detail: `len=${md.length}` });
+
+  const VALID_RESPONSE = ["AMENDMENT_AND_REMARKS", "REMARKS_ONLY", "RCE_WITH_AMENDMENT", "AFTER_FINAL_AMENDMENT", "OTHER"];
+  checks.push({
+    name: "responseType is a sanctioned enum value",
+    pass: VALID_RESPONSE.includes(result.responseType),
+    detail: result.responseType,
+  });
+
+  checks.push({
+    name: "canDraftFromSources=true given an OA and claims are in the record",
+    pass: result.canDraftFromSources === true,
+    detail: `canDraftFromSources=${result.canDraftFromSources}`,
+  });
+
+  // 37 CFR 1.121(c): the listing must contain every claim, not only amended
+  // ones, each with a status identifier, in ascending order.
+  const nums = result.claimListing.map((c) => Number(c.claimNumber)).filter((n) => !Number.isNaN(n));
+  checks.push({
+    name: "claim listing is non-empty and includes claim 1",
+    pass: nums.includes(1),
+    detail: `claims=[${nums.join(",")}]`,
+  });
+  checks.push({
+    name: "claim listing is in ascending order (37 CFR 1.121(c))",
+    pass: nums.every((n, i) => i === 0 || n > nums[i - 1]),
+    detail: `order=[${nums.join(",")}]`,
+  });
+
+  const VALID_STATUS = ["ORIGINAL", "CURRENTLY_AMENDED", "PREVIOUSLY_PRESENTED", "CANCELED", "WITHDRAWN", "NEW"];
+  const badStatus = result.claimListing.filter((c) => !VALID_STATUS.includes(c.status)).map((c) => c.claimNumber);
+  checks.push({
+    name: "every claim carries a valid 1.121(c) status identifier",
+    pass: badStatus.length === 0,
+    detail: badStatus.length ? `bad on claims ${badStatus.join(",")}` : undefined,
+  });
+
+  // An amended claim with no markup cannot be filed -- the examiner cannot see
+  // what changed.
+  const amended = result.claimListing.filter((c) => c.status === "CURRENTLY_AMENDED");
+  checks.push({
+    name: "amended claims carry <u>/<s> change markup",
+    pass: amended.length === 0 || amended.every((c) => /<u>|<s>/i.test(c.text)),
+    detail: `amended=${amended.length}, marked=${amended.filter((c) => /<u>|<s>/i.test(c.text)).length}`,
+  });
+
+  // The §132(a) new-matter check: added language must cite written-description
+  // support. This is the single most consequential defect an amendment can have.
+  checks.push({
+    name: "no added claim language without written-description support (§132(a))",
+    pass: result.unsupportedAmendmentCount === 0,
+    detail: `unsupported=${result.unsupportedAmendmentCount}`,
+  });
+
+  checks.push({
+    name: "remarks address at least one rejection",
+    pass: result.remarks.length > 0,
+    detail: `remarks=${result.remarks.length}`,
+  });
+
+  const substantive = result.remarks.every((r) => r.argument.length > 150);
+  checks.push({
+    name: "each remark is substantive (>150 chars)",
+    pass: result.remarks.length === 0 || substantive,
+    detail: result.remarks.map((r) => r.argument.length).join(","),
+  });
+
+  checks.push({
+    name: "no untraceable authorities survive verification",
+    pass: result.unverifiedAuthorityCount === 0,
+    detail: `dropped=${result.unverifiedAuthorityCount}`,
+  });
+
+  return finalize("draftAmendment", checks);
 }
 
 async function evalCaseStatus(): Promise<Scorecard> {
@@ -252,8 +333,8 @@ async function evalCaseStatus(): Promise<Scorecard> {
 async function main() {
   const cards: Scorecard[] = [];
   for (const [name, fn] of [
-    ["predictNextAction", evalPredictNextAction],
     ["draftNextMotion", evalDraftNextMotion],
+    ["draftAmendment", evalDraftAmendment],
     ["getCaseStatus", evalCaseStatus],
   ] as const) {
     console.log(`\n[eval-actions] running ${name}…`);
@@ -274,6 +355,11 @@ async function main() {
       if (!c.pass) console.log(`  [${card.id}] ${c.name}${c.detail ? `  → ${c.detail}` : ""}`);
     }
   }
+
+  printSplit(cards);
+  const { jsonPath, label } = parseReportArgs(process.argv);
+  const { model, embedModel } = await describeModels();
+  await writeReport("eval_actions", cards, { jsonPath, label, model, embedModel });
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

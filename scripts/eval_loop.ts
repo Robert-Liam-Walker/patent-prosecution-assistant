@@ -8,6 +8,15 @@
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
+import {
+  parseReportArgs,
+  writeReport,
+  printSplit,
+  describeModels,
+  type CheckKind,
+  type ReportCard,
+} from "./eval-report";
+
 const CASE_ID = "ea68b684-8f5b-4afa-b4e1-684b48b27707";
 
 type TestCase = {
@@ -53,13 +62,17 @@ const TESTS: TestCase[] = [
   },
 ];
 
+// `kind` defaults to "capability" -- see scripts/eval-report.ts. A check is
+// tagged "workaround" only when it encodes a Llama 3.1 8B guardrail rather
+// than a legal-correctness requirement.
 type Check = {
   name: string;
   pass: boolean;
   detail?: string;
+  kind?: CheckKind;
 };
 
-type Scorecard = {
+type Scorecard = ReportCard & {
   testId: string;
   routed: "structured" | "freeform" | "error";
   checks: Check[];
@@ -229,6 +242,10 @@ async function scoreStructured(
     }
   }
   checks.push({
+    // WORKAROUND: verbatim quoting is an 8B anti-fabrication guardrail. A model
+    // that paraphrases accurately will fail this while being more correct, so it
+    // must not gate a phase. Phase 2b retires the auto-downgrade it pairs with.
+    kind: "workaround",
     name: "all evidence quotes appear verbatim in retrieved chunks",
     pass: evidenceProblems.length === 0,
     detail: evidenceProblems.length > 0 ? evidenceProblems.slice(0, 3).join(" | ") : undefined,
@@ -279,8 +296,10 @@ async function scoreStructured(
 }
 
 function finalize(testId: string, routed: Scorecard["routed"], checks: Check[]): Scorecard {
-  const passCount = checks.filter((c) => c.pass).length;
-  return { testId, routed, checks, passCount, totalCount: checks.length };
+  const normalized = checks.map((c) => ({ ...c, kind: c.kind ?? ("capability" as CheckKind) }));
+  const passCount = normalized.filter((c) => c.pass).length;
+  // `id` mirrors `testId` so the scorecard satisfies the shared ReportCard shape.
+  return { testId, id: testId, routed, checks: normalized, passCount, totalCount: normalized.length };
 }
 
 function printCard(card: Scorecard) {
@@ -311,6 +330,11 @@ async function main() {
       if (!c.pass) console.log(`  [${card.testId}] ${c.name}${c.detail ? `  → ${c.detail}` : ""}`);
     }
   }
+
+  printSplit(cards);
+  const { jsonPath, label } = parseReportArgs(process.argv);
+  const { model, embedModel } = await describeModels();
+  await writeReport("eval_loop", cards, { jsonPath, label, model, embedModel });
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, User, Sparkles } from "lucide-react";
+import { Markdown } from "@/components/Markdown";
 
 export function Chat({ caseId }: { caseId?: string }) {
   const transport = useMemo(
@@ -99,8 +100,10 @@ function MessageBubble({ message }: { message: { id: string; role: string; parts
       <div className="size-7 rounded-full bg-foreground text-background grid place-items-center shrink-0">
         <Sparkles className="size-3.5" />
       </div>
-      <div className="flex-1 whitespace-pre-wrap text-sm pt-1 leading-relaxed">
-        {text}
+      {/* Assistant output is markdown -- the rejection analyzer streams a
+          rendered (A)-(E) template with headers, quotes and warnings. */}
+      <div className="flex-1 text-sm pt-1 leading-relaxed">
+        <Markdown>{text}</Markdown>
       </div>
     </div>
   );

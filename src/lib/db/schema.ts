@@ -23,6 +23,20 @@ export const docTypeEnum = pgEnum("doc_type", [
   "office_action",
 ]);
 
+// What kind of document a user uploaded. Drafting needs to distinguish an
+// invention disclosure from an office action; before this existed everything
+// was indistinguishable, so pre-existing rows default to 'other'.
+export const docKindEnum = pgEnum("doc_kind", [
+  "disclosure",
+  "office_action",
+  "claims",
+  "prior_art",
+  "specification",
+  "other",
+]);
+
+export const draftKindEnum = pgEnum("draft_kind", ["application", "amendment"]);
+
 export const messageRoleEnum = pgEnum("message_role", [
   "user",
   "assistant",
@@ -69,6 +83,7 @@ export const caseDocs = pgTable(
     storageKey: text("storage_key").notNull(), // R2 key or local path
     sizeBytes: integer("size_bytes"),
     chunkCount: integer("chunk_count").default(0).notNull(),
+    kind: docKindEnum("kind").default("other").notNull(),
     uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   },
   (t) => [index("case_docs_case_idx").on(t.caseId)],
@@ -140,6 +155,38 @@ export const usptoCache = pgTable("uspto_cache", {
   key: text("key").primaryKey(), // e.g., "status:17/123,456"
   payload: jsonb("payload").notNull(),
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+});
+
+// Records which embedding model wrote the vectors currently in `chunks`.
+//
+// Cosine similarity is only meaningful within a single embedding space. If the
+// query is embedded by one model while the stored vectors came from another,
+// retrieval does not error -- it silently returns near-random neighbours that
+// look plausible. That is the worst possible failure mode for a grounded legal
+// tool, so the provenance is written down and checked rather than assumed.
+// Generated drafts. `sections` is jsonb keyed by section name (title,
+// background, claims, ...) rather than one text blob, so a single section can
+// be regenerated without rewriting the rest of the document.
+export const drafts = pgTable(
+  "drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    kind: draftKindEnum("kind").notNull(),
+    title: text("title").notNull(),
+    sections: jsonb("sections").notNull().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [index("drafts_case_idx").on(t.caseId)],
+);
+
+export const embeddingMeta = pgTable("embedding_meta", {
+  id: text("id").primaryKey(), // always "current"
+  model: text("model").notNull(),
+  dimensions: integer("dimensions").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({

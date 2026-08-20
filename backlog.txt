@@ -205,6 +205,11 @@ See CLAUDE.md → "Tracking discipline" for the workflow.
    Ready to apply this template to draftNextMotion / predictNextAction
    / getStatus (item #5 / Task #64).
 
+[REMOVED 2026-08-19] predictNextAction — feature deleted at user request.
+   src/lib/predict-action.ts, its server action, ActionBar entry, and its 8
+   eval checks are gone. References to it in items 5 and 10 below are kept as
+   a historical record of what was built, not a description of current state.
+
 [DONE] 5. Structured output for predefined actions
    Shipped three new helpers, all following the analyze-rejection.ts
    template (flat Zod schema + soft enums + nullish/SoftBool coercions
@@ -241,12 +246,12 @@ See CLAUDE.md → "Tracking discipline" for the workflow.
    sources_used). Hardest constraint on hallucination; gives the UI
    exact fields to render.
 
-[TODO] 6. Citation verification post-pass
+[PARTIAL] 6. Citation verification post-pass
    Regex-extract [Source N] from model output; strip or flag any N that
    doesn't appear in the retrieved chunk list. Runs server-side before
    returning the stream. Pairs with item 5.
 
-[TODO] 7. Reranker over top-50 retrieval
+[DEFERRED — re-evaluate after Voyage] 7. Reranker over top-50 retrieval
    Cosine alone is mediocre on legal queries. Add BGE-reranker-large
    (local) or Cohere rerank-3 (hosted) over top-50 → top-10. Wire into
    src/lib/rag.ts behind a RERANKER env flag.
@@ -257,7 +262,7 @@ See CLAUDE.md → "Tracking discipline" for the workflow.
    into case_docs like a user upload. Builds on the metadata/documents
    endpoints already wired in src/lib/uspto.ts.
 
-[TODO] 9. Model upgrade path
+[IN PROGRESS 2026-08-19] 9. Model upgrade path
    Llama 3.1 8B is the ceiling for legal nuance. Document + test swap to
    hosted Claude (sonnet-4-6 or opus-4-7) per the "Swapping Ollama →
    hosted" section. Acceptance test: re-run the 2026-05-24 eval prompts
@@ -295,7 +300,7 @@ See CLAUDE.md → "Tracking discipline" for the workflow.
    analyze-rejection.ts is the reusable template; remaining work is
    applying it to draftNextMotion / predictNextAction / getStatus.
 
-[TODO] 10. Eval harness
+[DUPLICATE — see item 10 above, DONE] 10. Eval harness
     Borrow the pattern from ../llm-bench. Fixed prompts + expected
     citations + judge model. Run on each prompt/model change to catch
     regressions like the buzzword-amendment failure mode.
@@ -326,7 +331,7 @@ See CLAUDE.md → "Tracking discipline" for the workflow.
     turns plus retrieval on the FULL conversation (not just last
     message). Pairs with item 11 (Auth.js) for multi-user separation.
 
-[TODO] 14. Deployment topology: AWS frontend + local-GPU Ollama backend
+[CLOSED — SUPERSEDED 2026-08-19] 14. Deployment topology: AWS frontend + local-GPU Ollama backend
     User scratch note 2026-05-25 (backlog2): "tailscale or cloudflare
     instead of port forwarding, put it on a simple aws vm, maybe a
     t3.small (all the logic wont live here just the frontend), and
@@ -339,3 +344,31 @@ See CLAUDE.md → "Tracking discipline" for the workflow.
     moving the model off-prem. Confirms the openai-compatible
     abstraction also works against remote Ollama, which is useful
     independent of deployment plan.
+
+─── 2026-08-19 SESSION NOTES ─────────────────────────────────────────────────
+Bookkeeping reconciled while migrating off Ollama:
+
+  Item 6 (citation post-pass): was [TODO] while item 10's DONE note claimed
+    verifyEvidence already collapsed it. Both were half right. verifyEvidence
+    covers the EVIDENCE field in analyze-rejection only; verifyAuthorities
+    covers cited authorities in draft-motion. Neither covers [Source N] markers
+    in freeform chat output, which is what item 6 originally described. Marked
+    [PARTIAL] rather than DONE.
+
+  Item 10 appeared twice — once DONE (the harness that was actually built) and
+    once TODO (the original entry, never struck through). The TODO copy is
+    marked as a duplicate rather than deleted, so the history stays readable.
+
+  Item 7 (reranker): a better embedding model and a reranker solve overlapping
+    problems. Deferred until the Voyage migration can be measured; building
+    both at once would make neither attributable.
+
+  Item 14 (EC2 frontend -> Tailscale -> local GPU Ollama): closed. It is an
+    architecture for keeping inference local, which is the opposite of the
+    direction taken. Recorded rather than deleted — if hosted inference is ever
+    reversed for confidentiality reasons, this is the design to return to.
+
+  NEW: eval baselines now live in evals/. Each phase writes a JSON report and
+    the checks are split capability vs workaround, because several assertions
+    exist only to absorb 8B failure modes and must not gate a stronger model.
+──────────────────────────────────────────────────────────────────────────────

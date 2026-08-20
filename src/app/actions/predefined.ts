@@ -1,7 +1,7 @@
 "use server";
 
 import { generateText } from "ai";
-import { chatModel } from "@/lib/llm";
+import { FAST } from "@/lib/llm";
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { getCurrentUserId } from "@/lib/auth";
@@ -9,8 +9,9 @@ import { DRAFT_EMAIL_PROMPT, SYSTEM_PROMPT, NO_SOURCES_NOTE } from "@/lib/prompt
 import { retrieve, formatContext, type RetrievedChunk } from "@/lib/rag";
 import { getApplicationStatus } from "@/lib/uspto";
 import { draftNextMotion as draftNextMotionStructured, renderDraftedMotionMarkdown } from "@/lib/draft-motion";
-import { predictNextAction as predictNextActionStructured, renderPredictedActionMarkdown } from "@/lib/predict-action";
 import { getCaseStatus as getCaseStatusStructured, renderCaseStatusMarkdown } from "@/lib/case-status";
+import { analyzeRejection } from "@/lib/analyze-rejection";
+import { draftAmendment as draftAmendmentStructured, renderAmendmentMarkdown } from "@/lib/draft-amendment";
 
 type ActionResult = { ok: true; output: string } | { ok: false; error: string };
 
@@ -65,6 +66,31 @@ export async function draftNextMotion(caseId: string): Promise<ActionResult> {
   }
 }
 
+export async function draftAmendment(caseId: string): Promise<ActionResult> {
+  try {
+    const summary = await loadCaseSummary(caseId);
+    // §1.121 pulls in the amendment-format rules; the rest pulls the OA, the
+    // current claims, and the cited references.
+    const { chunks } = await withRetrievedContext(
+      caseId,
+      "office action rejection claims amendment 37 CFR 1.121 manner of making amendments prior art",
+    );
+
+    // Run the rejection analysis first and hand its verdicts to the drafter.
+    // Two independent model calls deciding which limitations fail would
+    // eventually disagree, and a response whose remarks contradict its own
+    // claim amendments is worse than no response at all.
+    const analysis = await analyzeRejection(
+      "Analyze the outstanding rejection for the purpose of drafting a response.",
+      chunks,
+    );
+    const result = await draftAmendmentStructured(analysis, summary, chunks);
+    return { ok: true, output: renderAmendmentMarkdown(result) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // Email drafting hasn't been migrated to structured output — it stays
 // on freeform generateText because the schema would be minimal
 // (recipient/subject/body) and the freeform prompt already works well
@@ -77,25 +103,11 @@ export async function draftNextEmail(caseId: string): Promise<ActionResult> {
       "recent correspondence; client updates",
     );
     const { text } = await generateText({
-      model: chatModel,
+      ...FAST,
       system: systemFor(chunks),
       prompt: `${DRAFT_EMAIL_PROMPT(summary)}\n\nSources:\n${ctx || "(none retrieved)"}`,
     });
     return { ok: true, output: text };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-export async function predictNextAction(caseId: string): Promise<ActionResult> {
-  try {
-    const summary = await loadCaseSummary(caseId);
-    const { chunks } = await withRetrievedContext(
-      caseId,
-      "office action history; rejections; examiner patterns; finality",
-    );
-    const result = await predictNextActionStructured(summary, chunks);
-    return { ok: true, output: renderPredictedActionMarkdown(result) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

@@ -22,12 +22,18 @@ export function DocPanel({
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  // Document kind is chosen at upload, not inferred. Drafting refuses to run
+  // without a document explicitly marked as the invention disclosure --
+  // guessing which upload is the disclosure risks drafting a specification for
+  // the wrong invention.
+  const [kind, setKind] = useState<string>("other");
 
   function onUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
     startTransition(async () => {
       const form = new FormData();
       form.append("caseId", caseId);
+      form.append("kind", kind);
       for (const f of Array.from(files)) form.append("files", f);
       const res = await fetch("/api/docs", { method: "POST", body: form });
       if (!res.ok) {

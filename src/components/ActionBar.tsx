@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import {
   draftNextMotion,
   draftNextEmail,
-  predictNextAction,
+  draftAmendment,
   getStatus,
 } from "@/app/actions/predefined";
 import { toast } from "sonner";
-import { FileText, Mail, Brain, Activity } from "lucide-react";
+import { FileText, Mail, Activity, FilePenLine } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,8 +17,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Markdown } from "@/components/Markdown";
 
-type ActionKey = "motion" | "email" | "predict" | "status";
+type ActionKey = "motion" | "amendment" | "email" | "status";
 
 const ACTIONS: Array<{
   key: ActionKey;
@@ -27,8 +28,8 @@ const ACTIONS: Array<{
   run: (caseId: string) => Promise<{ ok: boolean; output?: string; error?: string }>;
 }> = [
   { key: "motion", label: "Draft next motion", icon: FileText, run: draftNextMotion },
+  { key: "amendment", label: "Draft amendment + remarks", icon: FilePenLine, run: draftAmendment },
   { key: "email", label: "Draft next email", icon: Mail, run: draftNextEmail },
-  { key: "predict", label: "Predict next USPTO action", icon: Brain, run: predictNextAction },
   { key: "status", label: "Get status", icon: Activity, run: getStatus },
 ];
 
@@ -89,7 +90,7 @@ export function ActionBar({ caseId }: { caseId: string }) {
             <DialogTitle>{activeLabel}</DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">
-            <pre className="whitespace-pre-wrap text-sm font-sans">{output}</pre>
+            <Markdown>{output ?? ""}</Markdown>
           </ScrollArea>
         </DialogContent>
       </Dialog>

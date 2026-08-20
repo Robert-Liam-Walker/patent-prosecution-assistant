@@ -1,14 +1,14 @@
 # Patent Prosecution Assistant
 
-Patent Prosecution Assistant is a ChatGPT-style research tool for patent prosecutors built with Next.js and local Ollama. It combines a per-case workspace and document upload with grounded retrieval over a public-domain corpus of MPEP, 35 U.S.C., 37 C.F.R., PTAB, and Federal Circuit text, plus predefined actions that return structured drafts and predictions.
+Patent Prosecution Assistant is a ChatGPT-style research tool for patent prosecutors built with Next.js and the Claude API. It combines a per-case workspace and document upload with grounded retrieval over a public-domain corpus of MPEP, 35 U.S.C., 37 C.F.R., PTAB, and Federal Circuit text, plus predefined actions that return structured, source-attributed drafts.
 
 ## About
 
 A general-purpose chatbot answers patent-law questions fluently and wrongly, inventing section numbers that sound right. This project takes the opposite bet: retrieve first from the actual public-domain text, then answer only from what came back. Retrieval picks the answer mode, not the model. GROUNDED when sources exist, with each assertion labeled `BINDING` for statute and regulation or `PERSUASIVE` for MPEP guidance; FRAMEWORK only when retrieval returns nothing, so a gap is stated rather than filled.
 
-Everything runs on local Ollama, so no LLM API keys are required and no client document leaves the machine.
+Generation runs on hosted Claude, tiered by task: Opus at `xhigh` effort for claim-by-claim § 102/§ 103 analysis and drafting, Sonnet for routine drafting, Haiku for mechanical formatting. Effort is a per-request compute dial with no local-inference equivalent, and it is the reason the project moved off Llama 3.1 8B — see [Confidentiality](#confidentiality) for what that means for client documents.
 
-Live captures of the running app, not mockups: local Llama 3.1 8B over a pgvector corpus of MPEP §§ 2131/2143 and the 20 most-cited 35 U.S.C. sections, plus three uploaded case documents.
+Live captures of the running app, not mockups: a pgvector corpus of MPEP §§ 2131/2143 and the most-cited 35 U.S.C. sections, plus three uploaded case documents. The screenshots predate the move to hosted Claude; the layout is unchanged.
 
 ### Global Research
 
@@ -28,20 +28,64 @@ Per-case view with the predefined-action bar, a document panel showing per-file 
 
 ### Predefined Actions
 
-`Predict next USPTO action` returns a typed prediction covering action, probability, reasoning, and alternatives, with each finding attributed to the case document it came from.
-
-<p align="center">
-  <img src="docs/screenshots/03-predict-next-action.jpg" width="720" alt="Predict next USPTO action dialog predicting FINAL_OA with HIGH probability, citing office_action.txt and prior_art_us9123456.txt">
-</p>
+Per-case actions return structured output rendered from a fixed template rather than free-form prose, so section headings are guaranteed and every finding is attributed to the case document it came from.
 
 ## Core Features
 
 - Create a case, upload its documents, and have them chunked and embedded automatically
 - Ask questions answered from retrieved text, with a source label on every assertion
 - Search the case's own documents and the global corpus together, or research the corpus alone
-- Draft the next motion, draft the next client email, predict the next USPTO action, and get case status
+- Draft the next motion, draft a response with claim amendments, draft the next client email, and get case status
+- Draft a full patent application from an invention disclosure, section by section, with .docx export
 - Seed the corpus from official sources with per-fetcher dry-run and idempotent reseed flags
 - Look up live application data from the USPTO Open Data Portal
+
+## Drafting
+
+Two drafting paths, grounded differently.
+
+**Amendments and responses** run under the same rule as everything else: the office action and the current claims are both in the record, so nothing is asserted that retrieval did not supply. The drafter consumes `analyzeRejection`'s verdicts rather than re-deciding which limitations fail — two independent calls would eventually disagree, and a response whose remarks contradict its own claim amendments is worse than no response. Output is a claim listing marked up per 37 C.F.R. § 1.121(c) plus remarks traversing each rejection. Any claim adding language without a written-description citation is flagged: unsupported additions are new matter under 35 U.S.C. § 132(a).
+
+**Application drafting** is the one place the grounding rule bends, and the bend is narrow. The invention disclosure is in the record once uploaded, so every technical fact still traces to a source. What is newly permitted is composing *form* — section scaffolding, transitional phrasing, claim syntax. What is never permitted is inventing substance: an embodiment, an advantage, a numeric range, or a result the inventor did not disclose. Where the disclosure is silent the drafter emits `[ATTORNEY INPUT NEEDED: ...]` and continues. Those markers are counted and surfaced, because an admitted gap is recoverable and invented matter in a filed application is not.
+
+Mechanical checks run on every draft: the abstract against the 150-word limit in 37 C.F.R. § 1.72(b), and claim-by-claim antecedent basis under § 112(b) by walking each dependency chain for a `the X` with no earlier `a X`.
+
+Document type is chosen at upload, not inferred. Drafting refuses to run without a document explicitly marked as the invention disclosure — guessing which upload is the disclosure risks producing a plausible application for the wrong invention.
+
+## Confidentiality
+
+This tool sends case documents to third-party APIs. Before pointing it at a live matter, know exactly what leaves the machine:
+
+| Data | Goes to | When |
+|---|---|---|
+| Retrieved chunks of case documents + your query | Anthropic | Every chat turn and predefined action |
+| Full text of every chunk (case and corpus) | Voyage AI | Once per document at upload, and on `npm run reembed` |
+| Full text of the invention disclosure | Anthropic | Every section of an application draft (8 calls) |
+| Uploaded files themselves | Cloudflare R2, or local `./uploads/` | At upload |
+| Application number | USPTO Open Data Portal | "Get status" only |
+
+An earlier version of this project ran entirely on local Ollama and could honestly claim no client document left the machine. That is no longer true, and the tradeoff was deliberate: Llama 3.1 8B could not sustain claim-by-claim § 102/§ 103 analysis, and three rounds of prompt tightening made it worse rather than better.
+
+Points a practitioner should confirm independently rather than take from this README:
+
+- **Unpublished applications are confidential under 35 U.S.C. § 122.** Whether transmitting them to a third-party API is consistent with your obligations — including the duty of confidentiality and any client engagement terms — is your determination to make, not this tool's.
+- **Anthropic does not train on API inputs or outputs by default**, and zero-retention arrangements are available on request. Verify current terms directly rather than relying on this file.
+- **Voyage receives document text**, not just queries. Embedding is not a lesser exposure than generation.
+- **There is no per-user isolation.** `src/lib/auth.ts` is a single-user stub with a hardcoded ID. Do not deploy this multi-tenant as-is.
+
+If local-only operation matters more than analytical quality for your use, set `EMBED_PROVIDER=ollama` and point `src/lib/llm.ts` back at a local model — the seams are still there, and the 8B ceiling is documented in `backlog.txt` items 4b/4c.
+
+## Swapping providers
+
+Both migrations are one file each, but the embedding swap has an ordering constraint that the code enforces.
+
+**Generation** — `src/lib/llm.ts` exports four task profiles (`REASONING`, `DRAFTING`, `FAST`, `UTILITY`), each bundling a model with its `maxOutputTokens` and provider options. Call sites spread a profile rather than naming a model, so retiering is a one-line change per profile. Note that `maxOutputTokens` caps thinking *and* response text together: Opus 5 thinks by default, so a limit sized only for the JSON payload will truncate mid-answer.
+
+**Embeddings** — `src/lib/embed.ts` selects a backend with `EMBED_PROVIDER` (`voyage` by default, `ollama` for the legacy path). Changing the embedding model invalidates every stored vector: cosine similarity is only meaningful within one embedding space, and comparing across two returns plausible-looking nonsense rather than an error.
+
+That failure is silent, so it is guarded rather than documented. `embedding_meta` records which model wrote the vectors, `src/lib/rag.ts` checks it before every search, and `npm run reembed` updates it only after a complete pass. Switch models and the next query fails loudly with instructions instead of quietly returning the wrong sources.
+
+`npm run reembed` re-embeds in place from `chunks.text` — it does not re-scrape Cornell, the eCFR API, PTAB, or CAFC, and does not re-parse uploaded PDFs. It also preserves case UUIDs, which the eval harnesses hardcode.
 
 ## Tech Stack
 
@@ -51,11 +95,14 @@ Per-case view with the predefined-action bar, a document panel showing per-file 
 - Vercel AI SDK v6
 - Drizzle ORM
 - Postgres with pgvector
-- Local Ollama (Llama 3.1 8B chat, mxbai-embed-large embeddings at 1024 dims)
+- Anthropic Claude for generation (Opus 5 / Sonnet 5 / Haiku 4.5, tiered by task)
+- Voyage AI for embeddings (`voyage-law-2`, 1024 dims)
 - Cloudflare R2, with a local filesystem fallback
 - USPTO Open Data Portal
 
-Swapping to a hosted provider is a two-file change: `src/lib/llm.ts` and `src/lib/embed.ts`.
+Generation and embeddings are separate providers by necessity, not preference: Anthropic ships no embedding model. The AI SDK makes this explicit — `@ai-sdk/anthropic` types `embeddingModel()` as returning `never` and throws at runtime. Retrieval therefore runs on Voyage, whose `voyage-law-2` is legal-domain tuned and fixed at 1024 dimensions, matching the `chunks.embedding` column exactly.
+
+The provider seams are `src/lib/llm.ts` (generation, tiered) and `src/lib/embed.ts` (embeddings).
 
 ## Project Structure
 
@@ -78,18 +125,18 @@ Swapping to a hosted provider is a two-file change: `src/lib/llm.ts` and `src/li
    ```
    [Neon](https://neon.tech) works too: free, and it supports pgvector.
 
-2. Start Ollama and pull the models (~5.4 GB on disk):
+2. Configure the environment and push the schema:
    ```bash
-   brew services start ollama
-   ollama pull llama3.1:8b           # chat model
-   ollama pull mxbai-embed-large     # embeddings (1024 dims)
-   ```
-
-3. Configure the environment and push the schema:
-   ```bash
-   cp .env.example .env.local        # fill in DATABASE_URL, USPTO_ODP_KEY, R2 keys
+   cp .env.example .env.local        # fill in DATABASE_URL, ANTHROPIC_API_KEY, VOYAGE_API_KEY
    npm install
    npm run db:push
+   ```
+
+3. Embed the corpus. Retrieval refuses to run against vectors written by a
+   different embedding model than the one configured, so this is required
+   before the app will answer anything:
+   ```bash
+   npm run reembed
    ```
 
 4. Run the dev server at http://localhost:3000:
@@ -147,7 +194,7 @@ Next up: citation verification post-pass, reranker over top-50 retrieval, conver
 - Working prototype, single-user. Auth is a hardcoded stub and the Auth.js v5 swap-in is backlogged.
 - Chat has no memory across turns yet. Retrieval runs on the last user message, not the full conversation.
 - There is no citation-verification pass yet, so the 8B model still emits the occasional section number that is not in the retrieved set.
-- Assistant output renders as plain text, so Markdown in a response shows literally. Visible in the screenshots above.
+- ~~Assistant output renders as plain text, so Markdown in a response shows literally.~~ Fixed — output now renders through `react-markdown`, including the `<u>`/`<s>` amendment markup that 37 C.F.R. § 1.121 requires. The screenshots above predate this.
 - FRAMEWORK mode is deliberately binary. It fires only when retrieval returns zero sources, after an earlier version dropped into it whenever any single load-bearing document was missing.
 
 ## License

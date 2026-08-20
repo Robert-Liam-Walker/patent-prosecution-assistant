@@ -12,6 +12,14 @@ export async function POST(req: NextRequest) {
     const userId = await getCurrentUserId();
     const form = await req.formData();
     const caseId = form.get("caseId");
+    // Document kind is supplied by the uploader. Unknown values fall back to
+    // "other" rather than erroring -- a mislabelled upload should not block
+    // ingestion, it just will not be eligible as a drafting source.
+    const VALID_KINDS = ["disclosure", "office_action", "claims", "prior_art", "specification", "other"] as const;
+    const rawKind = form.get("kind");
+    const kind = (typeof rawKind === "string" && (VALID_KINDS as readonly string[]).includes(rawKind)
+      ? rawKind
+      : "other") as (typeof VALID_KINDS)[number];
     if (typeof caseId !== "string") {
       return Response.json({ error: "caseId required" }, { status: 400 });
     }
@@ -44,6 +52,7 @@ export async function POST(req: NextRequest) {
         // Still keep the file row even if extraction fails, so the user sees it.
         await db.insert(schema.caseDocs).values({
           caseId,
+          kind,
           userId,
           filename: file.name,
           mime: file.type || "application/octet-stream",
@@ -62,6 +71,7 @@ export async function POST(req: NextRequest) {
         .insert(schema.caseDocs)
         .values({
           caseId,
+          kind,
           userId,
           filename: file.name,
           mime: file.type || "application/octet-stream",
