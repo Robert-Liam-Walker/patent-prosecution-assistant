@@ -7,7 +7,7 @@
 
 import { generateObject } from "ai";
 import { z } from "zod";
-import { chatModel } from "@/lib/llm";
+import { UTILITY } from "@/lib/llm";
 
 const Deadline = z.object({
   description: z.string().describe("Short label, e.g. 'Response to non-final OA'."),
@@ -67,7 +67,12 @@ export async function getCaseStatus(
   uploadedDocsSummary: string,
   opts: { maxAttempts?: number } = {},
 ): Promise<CaseStatus> {
-  const maxAttempts = opts.maxAttempts ?? 3;
+  // Was 3 attempts, to absorb Llama 3.1 8B emitting JSON that failed schema
+  // validation. A capable model does not need schema-repair retries, and the
+  // AI SDK already retries transport-level failures itself -- so an extra
+  // attempt here only re-bills a whole reasoning call. Kept at 2 as thin
+  // insurance against a genuinely flaky single response; override per call.
+  const maxAttempts = opts.maxAttempts ?? 2;
   const prompt = `USPTO Open Data Portal (raw JSON):
 ${usptoJson}
 
@@ -80,12 +85,10 @@ Produce the status card. Use empty string / empty array for anything not literal
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const { object } = await generateObject({
-        model: chatModel,
+        ...UTILITY,
         schema: ModelOutputSchema,
         system: STATUS_SYSTEM,
         prompt,
-        temperature: 0.1,
-        providerOptions: { ollama: { format: "json" } },
       });
       return synthesizeRecommendation(object);
     } catch (err) {

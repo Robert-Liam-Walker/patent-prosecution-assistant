@@ -15,7 +15,7 @@
 
 import { generateObject } from "ai";
 import { z } from "zod";
-import { chatModel } from "@/lib/llm";
+import { REASONING } from "@/lib/llm";
 import { traceableLabel, type RetrievedChunk } from "@/lib/rag";
 
 // Schema is intentionally flat — Llama 3.1 8B does not reliably honor
@@ -91,6 +91,9 @@ export const RejectionAnalysisSchema = ModelOutputSchema.extend({
   s102FailingLimitationIds: z.array(z.string()),
   s103Sustainable: z.boolean(),
   conclusion: z.string(),
+  // How many limitations carry a quote the verifier could not match verbatim.
+  // Surfaced so an unverified finding is visible rather than buried in `gap`.
+  unverifiedEvidenceCount: z.number().default(0),
 });
 
 export type RejectionAnalysis = z.infer<typeof RejectionAnalysisSchema>;
@@ -172,7 +175,12 @@ export async function analyzeRejection(
   chunks: RetrievedChunk[],
   opts: { maxAttempts?: number } = {},
 ): Promise<RejectionAnalysis> {
-  const maxAttempts = opts.maxAttempts ?? 3;
+  // Was 3 attempts, to absorb Llama 3.1 8B emitting JSON that failed schema
+  // validation. A capable model does not need schema-repair retries, and the
+  // AI SDK already retries transport-level failures itself -- so an extra
+  // attempt here only re-bills a whole reasoning call. Kept at 2 as thin
+  // insurance against a genuinely flaky single response; override per call.
+  const maxAttempts = opts.maxAttempts ?? 2;
   const sourcesBlock = chunks
     .map((c) => `[${traceableLabel(c)}] (${c.origin})\n${c.text}`)
     .join("\n\n---\n\n");
@@ -185,24 +193,17 @@ ${sourcesBlock || "(none)"}
 
 Produce the JSON object now. Quote claimText verbatim from the retrieved claims doc.`;
 
-  // 8B variance: generateObject occasionally produces JSON that fails
-  // schema validation even with the coercion layers in place. Retry on
-  // schema failure; lower temperature to bias toward repeatable shape.
+  // Retry on schema-validation failure. The soft-coercion wrappers on the
+  // schema are deliberately kept -- they cost nothing and absorb the
+  // occasional stringified boolean or unexpected enum label from any model.
   let lastErr: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const { object } = await generateObject({
-        model: chatModel,
+        ...REASONING,
         schema: ModelOutputSchema,
         system: ANALYZER_SYSTEM,
         prompt,
-        temperature: 0.1,
-        providerOptions: {
-          // Ollama supports `format: "json"` to constrain output to valid
-          // JSON. The openai-compatible provider passes provider options
-          // through for ollama.
-          ollama: { format: "json" },
-        },
       });
       return deriveVerdicts(verifyEvidence(object, chunks));
     } catch (err) {
@@ -222,13 +223,28 @@ Produce the JSON object now. Quote claimText verbatim from the retrieved claims 
 // retrieved chunk. Rationale: a DISCLOSED label that the model can't
 // back with verbatim quote text is unsafe in real prosecution — if you
 // can't quote the reference verbatim to the examiner, the limitation
-// isn't actually anticipated. The 8B model paraphrases when it should
-// quote, so we enforce verbatim at runtime instead of trusting the
-// prompt-level instruction.
+// isn't actually anticipated.
+//
+// This used to AUTO-DOWNGRADE any limitation whose evidence wasn't a verbatim
+// substring of a retrieved chunk. That was correct against Llama 3.1 8B, which
+// paraphrased when told to quote. It is dangerous against a model that quotes
+// accurately but legitimately normalises whitespace, hyphenation, or an ellipsis:
+// a single character of drift silently flips a correct DISCLOSED finding to
+// NOT_DISCLOSED, which in prosecution terms is the difference between "this
+// rejection stands" and "this rejection fails".
+//
+// The check is still worth running -- an unverifiable quote is exactly what
+// fabrication looks like -- so it now FLAGS rather than overrides. The label
+// the model assigned survives; the discrepancy is surfaced in `gap` for the
+// attorney to adjudicate, and counted in `unverifiedEvidenceCount`.
+type VerifiedOutput = z.infer<typeof ModelOutputSchema> & {
+  unverifiedEvidenceCount: number;
+};
+
 function verifyEvidence(
   modelOutput: z.infer<typeof ModelOutputSchema>,
   chunks: RetrievedChunk[],
-): z.infer<typeof ModelOutputSchema> {
+): VerifiedOutput {
   const haystacks = chunks.map((c) => c.text);
   // Apply verbatim-substring verification to DISCLOSED and
   // PARTIALLY_DISCLOSED rows. NOT_DISCLOSED rows by definition don't
@@ -239,18 +255,31 @@ function verifyEvidence(
   // if we can't quote anything, there's nothing arguably disclosed.
   const verifiedLimitations = modelOutput.limitations.map((lim) => {
     if (lim.disclosure === "NOT_DISCLOSED") return lim;
+
+    // No evidence at all for a disclosure finding is still a hard failure --
+    // that is an unsupported assertion, not a quoting-style difference.
     if (!lim.evidence || /no related text/i.test(lim.evidence)) {
-      return { ...lim, disclosure: "NOT_DISCLOSED" as const };
+      return {
+        ...lim,
+        disclosure: "NOT_DISCLOSED" as const,
+        gap: `${lim.gap ? lim.gap + " " : ""}[VERIFIER] disclosure asserted with no supporting quote; downgraded to NOT_DISCLOSED.`,
+      };
     }
+
     if (substringInTexts(lim.evidence, haystacks)) return lim;
+
+    // Quote present but not found verbatim: flag for review, do not override.
     return {
       ...lim,
-      disclosure: "NOT_DISCLOSED" as const,
-      evidence: "evidence not verifiable in retrieved sources",
-      gap: `model quoted "${lim.evidence.slice(0, 80)}..." but no verbatim match in primary reference; auto-downgraded to NOT_DISCLOSED`,
+      gap: `${lim.gap ? lim.gap + " " : ""}[VERIFY THIS QUOTE] "${lim.evidence.slice(0, 80)}..." was not found verbatim in the retrieved sources. The ${lim.disclosure} finding is the model's; confirm the quote against the reference before relying on it.`,
     };
   });
-  return { ...modelOutput, limitations: verifiedLimitations };
+
+  const unverifiedEvidenceCount = verifiedLimitations.filter((l) =>
+    (l.gap ?? "").includes("[VERIFY THIS QUOTE]"),
+  ).length;
+
+  return { ...modelOutput, limitations: verifiedLimitations, unverifiedEvidenceCount };
 }
 
 function substringInTexts(needle: string, haystacks: string[]): boolean {
@@ -275,9 +304,7 @@ function normalize(s: string): string {
 // s102FailingLimitationIds / s103Sustainable values relative to the
 // limitation array. PARTIALLY_DISCLOSED counts as NOT_DISCLOSED for the
 // verdict — §102 requires every limitation FULLY disclosed in one ref.
-function deriveVerdicts(
-  modelOutput: z.infer<typeof ModelOutputSchema>,
-): RejectionAnalysis {
+function deriveVerdicts(modelOutput: VerifiedOutput): RejectionAnalysis {
   const failing = modelOutput.limitations
     .filter((l) => l.disclosure !== "DISCLOSED")
     .map((l) => l.id);
@@ -347,6 +374,7 @@ function deriveVerdicts(
     s102FailingLimitationIds: failing,
     s103Sustainable,
     conclusion,
+    unverifiedEvidenceCount: modelOutput.unverifiedEvidenceCount,
   };
 }
 
@@ -392,6 +420,14 @@ export function renderAnalysisMarkdown(a: RejectionAnalysis): string {
     lines.push(`Secondary reference (§103): **${a.secondaryReference}**`);
   }
   lines.push("");
+  if (a.unverifiedEvidenceCount > 0) {
+    lines.push(
+      `> ⚠️ ${a.unverifiedEvidenceCount} limitation${a.unverifiedEvidenceCount === 1 ? "" : "s"} ` +
+        `cite a quote that could not be matched verbatim against the retrieved sources. ` +
+        `Those findings are flagged inline below and need manual confirmation.`,
+    );
+    lines.push("");
+  }
   lines.push("**(B) PRIOR ART MAPPING**");
   lines.push("");
   for (const lim of a.limitations) {

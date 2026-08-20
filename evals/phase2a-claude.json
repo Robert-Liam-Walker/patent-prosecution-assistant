@@ -1,0 +1,267 @@
+{
+  "label": "phase2a-claude",
+  "runs": 6,
+  "model": "claude-opus-5 + claude-sonnet-5 + claude-haiku-4-5",
+  "embedModel": "ollama:mxbai-embed-large",
+  "consolidatedAt": "2026-08-20T14:17:02.205Z",
+  "capability": {
+    "checks": 34,
+    "stablePass": 34,
+    "flaky": 0,
+    "stableFail": 0
+  },
+  "workaround": {
+    "checks": 1,
+    "stablePass": 1,
+    "flaky": 0,
+    "stableFail": 0
+  },
+  "checks": [
+    {
+      "key": "eval_actions::draftNextMotion::all cited authorities trace to retrieval (verifyAuthorities)",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::canDraftFromSources is boolean",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::draft body avoids stock boilerplate phrases",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::generateObject succeeds",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::nextDocumentType is a sanctioned enum value",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::plausible doc type given an active \u00a7102/\u00a7103 rejection",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::reason for doc type is non-trivial",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::render produces non-empty markdown",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::draftNextMotion::when canDraftFromSources=true, draftBody is substantive (>100 chars)",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::getCaseStatus::applicationNumber matches case record if provided",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::getCaseStatus::generateObject succeeds",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::getCaseStatus::recommendedNextStep is non-empty",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_actions::getCaseStatus::render produces non-empty markdown",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::general-question::routing matches expectation",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::\u00a7103 has at least one reference contribution when secondary cited and \u00a7102 fails",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::all disclosure labels are DISCLOSED|PARTIALLY_DISCLOSED|NOT_DISCLOSED",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::all evidence quotes appear verbatim in retrieved chunks",
+      "kind": "workaround",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::claimText quoted verbatim from retrieved case docs",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::generateObject succeeds",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::ground truth: [(b)(i),(e)] should be PARTIALLY or NOT_DISCLOSED (over/under-strict guard)",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::ground truth: at least one of [(b)(ii)|(b)(iii)] is non-DISCLOSED",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::ground truth: s102Satisfied == false",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::header present: (A) CLAIM BREAKDOWN",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::header present: (B) PRIOR ART MAPPING",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::header present: (C) \u00a7102 VERDICT",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::header present: (D) \u00a7103 ANALYSIS",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::header present: (E) CONCLUSION",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::no banned term: \\bessentially\\s+disclosed\\b",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::no banned term: \\bfully\\s+anticipat(?:ed|ion)\\b",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::no banned term: \\bpartial(?:ly)?\\s+anticipat(?:ed|ion)\\b",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::no banned term: \\bpartial\\s+\u00a7\\s*102\\b",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::routing matches expectation",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::s102FailingLimitationIds includes all non-DISCLOSED limitations",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::s102Satisfied matches limitation labels (binary verdict over 3-tier labels)",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    },
+    {
+      "key": "eval_loop::primary-102-103::s103Sustainable=false when \u00a7102 fails AND no motivation in record",
+      "kind": "capability",
+      "passes": 3,
+      "runs": 3,
+      "stability": "stable-pass"
+    }
+  ],
+  "modelNote": "Label reconstructed: the harness recorded \"(default)\" for this phase because it keyed off unset env vars. No ANTHROPIC_*_MODEL override was set, so src/lib/llm.ts defaults ran. Reporter fixed afterwards to read real IDs."
+}

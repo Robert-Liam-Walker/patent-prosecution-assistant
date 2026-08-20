@@ -12,7 +12,7 @@
 
 import { generateObject } from "ai";
 import { z } from "zod";
-import { chatModel } from "@/lib/llm";
+import { DRAFTING } from "@/lib/llm";
 import { traceableLabel, type RetrievedChunk } from "@/lib/rag";
 
 const DocumentType = z.enum([
@@ -100,7 +100,12 @@ export async function draftNextMotion(
   chunks: RetrievedChunk[],
   opts: { maxAttempts?: number } = {},
 ): Promise<DraftedMotion> {
-  const maxAttempts = opts.maxAttempts ?? 3;
+  // Was 3 attempts, to absorb Llama 3.1 8B emitting JSON that failed schema
+  // validation. A capable model does not need schema-repair retries, and the
+  // AI SDK already retries transport-level failures itself -- so an extra
+  // attempt here only re-bills a whole reasoning call. Kept at 2 as thin
+  // insurance against a genuinely flaky single response; override per call.
+  const maxAttempts = opts.maxAttempts ?? 2;
   const sourcesBlock = chunks
     .map((c) => `[${traceableLabel(c)}] (${c.origin})\n${c.text}`)
     .join("\n\n---\n\n");
@@ -117,12 +122,10 @@ Determine the next document to file and draft it if the sources support a defens
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const { object } = await generateObject({
-        model: chatModel,
+        ...DRAFTING,
         schema: ModelOutputSchema,
         system: DRAFT_SYSTEM,
         prompt,
-        temperature: 0.1,
-        providerOptions: { ollama: { format: "json" } },
       });
       return verifyAuthorities(object, chunks);
     } catch (err) {

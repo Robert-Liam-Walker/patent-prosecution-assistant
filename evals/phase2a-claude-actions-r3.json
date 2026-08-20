@@ -1,0 +1,107 @@
+{
+  "harness": "eval_actions",
+  "label": "phase2a-claude-r3",
+  "createdAt": "2026-08-20T13:56:06.422Z",
+  "model": "(default)",
+  "embedModel": "mxbai-embed-large",
+  "totals": {
+    "all": {
+      "pass": 13,
+      "total": 13
+    },
+    "capability": {
+      "pass": 13,
+      "total": 13
+    },
+    "workaround": {
+      "pass": 0,
+      "total": 0
+    }
+  },
+  "cards": [
+    {
+      "id": "draftNextMotion",
+      "checks": [
+        {
+          "name": "generateObject succeeds",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "render produces non-empty markdown",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "nextDocumentType is a sanctioned enum value",
+          "pass": true,
+          "detail": "got \"RESPONSE_NON_FINAL_OA\"",
+          "kind": "capability"
+        },
+        {
+          "name": "plausible doc type given an active §102/§103 rejection",
+          "pass": true,
+          "detail": "got \"RESPONSE_NON_FINAL_OA\"",
+          "kind": "capability"
+        },
+        {
+          "name": "reason for doc type is non-trivial",
+          "pass": true,
+          "detail": "len=241",
+          "kind": "capability"
+        },
+        {
+          "name": "canDraftFromSources is boolean",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "when canDraftFromSources=true, draftBody is substantive (>100 chars)",
+          "pass": true,
+          "detail": "len=2752",
+          "kind": "capability"
+        },
+        {
+          "name": "all cited authorities trace to retrieval (verifyAuthorities)",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "draft body avoids stock boilerplate phrases",
+          "pass": true,
+          "kind": "capability"
+        }
+      ],
+      "passCount": 9,
+      "totalCount": 9
+    },
+    {
+      "id": "getCaseStatus",
+      "checks": [
+        {
+          "name": "generateObject succeeds",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "render produces non-empty markdown",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "recommendedNextStep is non-empty",
+          "pass": true,
+          "kind": "capability"
+        },
+        {
+          "name": "applicationNumber matches case record if provided",
+          "pass": true,
+          "detail": "case=\"17/123,456\" model=\"17/123,456\"",
+          "kind": "capability"
+        }
+      ],
+      "passCount": 4,
+      "totalCount": 4
+    }
+  ]
+}

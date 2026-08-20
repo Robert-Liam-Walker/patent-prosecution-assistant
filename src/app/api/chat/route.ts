@@ -1,5 +1,11 @@
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
-import { chatModel } from "@/lib/llm";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  type UIMessage,
+} from "ai";
+import { FAST } from "@/lib/llm";
 import { SYSTEM_PROMPT, NO_SOURCES_NOTE } from "@/lib/prompts";
 import { retrieve, formatContext } from "@/lib/rag";
 import {
@@ -64,13 +70,22 @@ export async function POST(req: Request) {
     try {
       const analysis = await analyzeRejection(lastUserText, retrievedChunks);
       const markdown = renderAnalysisMarkdown(analysis);
-      const stream = streamText({
-        model: chatModel,
-        messages: [
-          { role: "user", content: `Repeat the following markdown verbatim, exactly as given. Do not add commentary, headers, or any other text.\n\n${markdown}` },
-        ],
+
+      // The markdown is already deterministic -- the renderer owns every
+      // section header. Emit it straight onto the UI stream rather than asking
+      // a model to echo it back. The previous "repeat this verbatim" round-trip
+      // was harmless against local 8B but against a hosted model it costs a
+      // full billed call per analysis and risks the model editorialising the
+      // text it was told to copy.
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          const id = "analysis";
+          writer.write({ type: "text-start", id });
+          writer.write({ type: "text-delta", id, delta: markdown });
+          writer.write({ type: "text-end", id });
+        },
       });
-      return stream.toUIMessageStreamResponse();
+      return createUIMessageStreamResponse({ stream });
     } catch (err) {
       console.error("[chat] analyzeRejection failed, falling back to freeform", err);
       // fall through to streamText below
@@ -84,7 +99,7 @@ export async function POST(req: Request) {
     : SYSTEM_PROMPT + NO_SOURCES_NOTE;
 
   const result = streamText({
-    model: chatModel,
+    ...FAST,
     system: systemPrompt,
     messages: modelMessages,
   });
